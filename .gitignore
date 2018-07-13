@@ -3,3 +3,6 @@ venv
 .DS_Store
 .env
 listings.pickle
+listings_abridged.pickle
+listings_abridged.json
+listings_abridged.csv

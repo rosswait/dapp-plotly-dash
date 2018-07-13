@@ -14,7 +14,11 @@ from dash.dependencies import Input, Output
 app = dash.Dash()
 app.css.append_css({'external_url': 'https://cdn.rawgit.com/plotly/dash-app-stylesheets/2d266c578d2a6e8850ebce48fdb52759b2aef506/stylesheet-oil-and-gas.css'})  # noqa: E501
 
-listings = pd.read_pickle(r'listings.pickle')
+#listings = pd.read_pickle(r'listings_abridged.pickle')
+url = 'https://s3.amazonaws.com/dapp-dash/listings_abridged.csv'
+listings = pd.read_csv(url)
+listings['inserted_at'] = pd.to_datetime(listings['inserted_at'])
+listings['interted_at_trunc'] = pd.to_datetime(listings['inserted_at_trunc'])
 
 graph = listings[(listings['duration_hours'] < 10000)
             & (listings['listing_start_price_normalized'] < 400)
@@ -221,7 +225,7 @@ def filter_dataframe(df, sample_index, names, month_slider, outcome_checklist):
 def sample_dataframe(df, points_per_series):
   index = []
   for name in names:
-      filtered_df = listings[listings['name'] == name]
+      filtered_df = df[df['name'] == name]
       if filtered_df.shape[0] > points_per_series:
           index.extend(list(filtered_df.sample(points_per_series).index))
       else:
