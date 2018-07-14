@@ -546,19 +546,6 @@ app.layout = html.Div(
   ],className='row'
 )
 
-
-'''
-@app.callback(
-    dash.dependencies.Output('marker-description', 'children'),
-    [dash.dependencies.Input('marker-symbol-picker', 'value')]
-  )
-def update_marker_legend(marker_symbols):
-    output = ''
-    for element in marker_symbols:
-      output += 'You\'ve selected "{}"'.format(element['symbol'])
-    return output
-'''
-
 @app.callback(
     dash.dependencies.Output('auction-scatter', 'figure'),
     [
