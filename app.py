@@ -12,6 +12,7 @@ from dateutil import relativedelta
 from dash.dependencies import Input, Output
 
 app = dash.Dash()
+server = app.server
 app.css.append_css({'external_url': 'https://cdn.rawgit.com/plotly/dash-app-stylesheets/2d266c578d2a6e8850ebce48fdb52759b2aef506/stylesheet-oil-and-gas.css'})  # noqa: E501
 
 #listings = pd.read_pickle(r'listings_abridged.pickle')
