@@ -13,12 +13,16 @@ from dash.dependencies import Input, Output, State
 
 app = dash.Dash()
 server = app.server
+
+# Boostrap CSS
 app.css.append_css({'external_url': 'https://cdn.rawgit.com/plotly/dash-app-stylesheets/2d266c578d2a6e8850ebce48fdb52759b2aef506/stylesheet-oil-and-gas.css'})  # noqa: E501
+# Loading screen CSS
+app.css.append_css({"external_url": "https://codepen.io/chriddyp/pen/brPBPO.css"})
 
 #listings = pd.read_pickle(r'listings_abridged.pickle')
-listings = pd.read_csv('listings_abridged.csv')
-##url = 'https://s3.amazonaws.com/dapp-dash/listings_abridged.csv'
-##listings = pd.read_csv(url)
+#listings = pd.read_csv('listings_abridged.csv')
+url = 'https://s3.amazonaws.com/dapp-dash/listings_abridged.csv'
+listings = pd.read_csv(url)
 
 listings['created_at'] = pd.to_datetime(listings['created_at'])
 listings['created_at_trunc'] = pd.to_datetime(listings['created_at_trunc'])
@@ -106,8 +110,8 @@ dimensions = {
     'label': 'Listed At',
     'inspector_rank':6
   },
-  'owners_cum': {
-    'label': 'Cumulative Token Owners',
+  'sales_cum': {
+    'label': 'Cumulative Token Sales',
     'inspector_rank':8
   },
   'listings_cum': {
