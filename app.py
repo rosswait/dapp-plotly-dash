@@ -26,9 +26,9 @@ data_types = {
  }
 
 
-listings = pd.read_csv('listings_abridged.csv', dtype=data_types)
-#url = 'https://s3.amazonaws.com/dapp-dash/listings_abridged.csv'
-#listings = pd.read_csv(url)
+path = 'https://s3.amazonaws.com/dapp-dash/listings_abridged.csv'
+#path = 'listings_abridged.csv'
+listings = pd.read_csv(path, dtype=data_types)
 
 listings['created_at'] = pd.to_datetime(listings['created_at'])
 listings['created_at_trunc'] = pd.to_datetime(listings['created_at_trunc'])
