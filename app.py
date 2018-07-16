@@ -78,7 +78,7 @@ data_types = {
 path = 'https://s3.amazonaws.com/dapp-dash/listings_abridged_sample.json'
 #path = 'listings_abridged_sample.json'
 #path = 'https://s3.amazonaws.com/dapp-dash/listings_abridged.json'
-reader = pd.read_json(path, chunksize=50000, dtype=data_types, compression='gzip', lines=True)
+reader = pd.read_json(path, chunksize=25000, dtype=data_types, compression='gzip', lines=True)
 graph = pd.concat([x for x in reader], ignore_index=True)
 
 #graph = pd.read_json(path, dtype=data_types, compression='gzip')
