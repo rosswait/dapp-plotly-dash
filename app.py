@@ -7,6 +7,7 @@ import plotly.graph_objs as go
 import pandas as pd
 import json
 import datetime as dt
+import numpy as np
 from dateutil import relativedelta
 
 from dash.dependencies import Input, Output, State
@@ -19,10 +20,15 @@ app.css.append_css({'external_url': 'https://cdn.rawgit.com/plotly/dash-app-styl
 # Loading screen CSS
 app.css.append_css({"external_url": "https://codepen.io/chriddyp/pen/brPBPO.css"})
 
-#listings = pd.read_pickle(r'listings_abridged.pickle')
-#listings = pd.read_csv('listings_abridged.csv')
-url = 'https://s3.amazonaws.com/dapp-dash/listings_abridged.csv'
-listings = pd.read_csv(url)
+data_types = {
+ 'resolution_from_address': np.object_,
+ 'resolution_to_address': np.object_
+ }
+
+
+listings = pd.read_csv('listings_abridged.csv', dtype=data_types)
+#url = 'https://s3.amazonaws.com/dapp-dash/listings_abridged.csv'
+#listings = pd.read_csv(url)
 
 listings['created_at'] = pd.to_datetime(listings['created_at'])
 listings['created_at_trunc'] = pd.to_datetime(listings['created_at_trunc'])
