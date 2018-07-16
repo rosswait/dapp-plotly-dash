@@ -223,7 +223,7 @@ def add_months(start_time, months):
 def generate_url(dapp_name, token_id):
   base_url = 'https://rarebits.io/item'
   dapp_name = dapp_name.replace(' ', '%20')
-  token_id = str(token_id)
+  token_id = str(int(token_id))
   return base_url+'/'+dapp_name+'/'+token_id
 
 def filter_dataframe(df, sample_index, dapp_names, month_slider, outcome_checklist, token_item_id=None, to_address=None):
