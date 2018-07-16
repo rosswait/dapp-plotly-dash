@@ -9,17 +9,19 @@ import json
 import datetime as dt
 from dateutil import relativedelta
 
-from dash.dependencies import Input, Output
+from dash.dependencies import Input, Output, State
 
 app = dash.Dash()
 server = app.server
 app.css.append_css({'external_url': 'https://cdn.rawgit.com/plotly/dash-app-stylesheets/2d266c578d2a6e8850ebce48fdb52759b2aef506/stylesheet-oil-and-gas.css'})  # noqa: E501
 
 #listings = pd.read_pickle(r'listings_abridged.pickle')
-url = 'https://s3.amazonaws.com/dapp-dash/listings_abridged.csv'
-listings = pd.read_csv(url)
-listings['inserted_at'] = pd.to_datetime(listings['inserted_at'])
-listings['interted_at_trunc'] = pd.to_datetime(listings['inserted_at_trunc'])
+listings = pd.read_csv('listings_abridged.csv')
+##url = 'https://s3.amazonaws.com/dapp-dash/listings_abridged.csv'
+##listings = pd.read_csv(url)
+
+listings['created_at'] = pd.to_datetime(listings['created_at'])
+listings['created_at_trunc'] = pd.to_datetime(listings['created_at_trunc'])
 
 graph = listings[(listings['duration_hours'] < 10000)
             & (listings['listing_start_price_normalized'] < 400)
@@ -60,6 +62,7 @@ dimensions = {
     'label': 'Sold Price',
     'default_axis_type':'log',
     'format': ".3f",
+    'ineligible_points': ['listed', 'unresolved', 'delisted'],
     'scatter_rank': 4,
     'inspector_rank':4
   },
@@ -67,11 +70,13 @@ dimensions = {
     'label': 'Start-Sold Range (Absolute)',
     'default_axis_type': 'log',
     'format': ".3f",
+    'ineligible_points': ['listed', 'unresolved', 'delisted'],
     'scatter_rank': 5
   },
   'resolution_drop_pct': {
     'label': 'Start-Sold Range (% of Start Price)',
     'format': '%',
+    'ineligible_points': ['listed', 'unresolved', 'delisted'],
     'scatter_rank': 6
   },
   'duration_hours': {
@@ -97,7 +102,7 @@ dimensions = {
     'label': 'Auction Resolution',
     'inspector_rank':1
   },
-  'inserted_at_trunc': {
+  'created_at_trunc': {
     'label': 'Listed At',
     'inspector_rank':6
   },
@@ -211,15 +216,24 @@ def generate_url(dapp_name, token_id):
   token_id = str(token_id)
   return base_url+'/'+dapp_name+'/'+token_id
 
-def filter_dataframe(df, sample_index, names, month_slider, outcome_checklist):
+def filter_dataframe(df, sample_index, dapp_names, month_slider, outcome_checklist, token_item_id=None, to_address=None):
+  print(type(token_item_id))
+  print(token_item_id)
+  if token_item_id is not None:
+    df = df.loc[df['token_item_id'] == token_item_id,:]
+  if to_address is not None:
+    df = df.loc[df['to_address'] == to_address,:]
+
+  # If there's a set of index values in the cache, use it to filter the data
   index = json.loads(sample_index)
   if index != {}:
     df = df.loc[index]
+
   filtered_df = df[
-          df['name'].isin(names)
+          df['name'].isin(dapp_names)
           & df['resolution_event_type'].isin(outcome_checklist)
-          & (df['inserted_at'] >= add_months(start_time, month_slider[0]))
-          & (df['inserted_at'] < add_months(start_time, month_slider[1] + 1))
+          & (df['created_at'] >= add_months(start_time, month_slider[0]))
+          & (df['created_at'] < add_months(start_time, month_slider[1] + 1))
   ]
   return filtered_df
 
@@ -542,6 +556,15 @@ app.layout = html.Div(
         )
       ]
     ),
+    html.Div(
+      [
+        dcc.Checklist(
+        id='auction-detail-freeze',
+        options=[{'label': 'Token Item', 'value': 'token_item_id'},{'label': 'Seller', 'value': 'to_address'}],
+        values=[]
+        )
+      ]
+    ),
     html.Div(id='sample-cache', style={'display': 'none'}),
     html.Div(id='selected-listing-cache', style={'display': 'none'})
   ],className='row'
@@ -558,11 +581,26 @@ app.layout = html.Div(
       dash.dependencies.Input('month-slider', 'value'),
       dash.dependencies.Input('outcome-checklist', 'values'),
       dash.dependencies.Input('x-axis-scale', 'value'),
-      dash.dependencies.Input('y-axis-scale', 'value')
-    ])
+      dash.dependencies.Input('y-axis-scale', 'value'),
+      dash.dependencies.Input('auction-detail-freeze', 'values')
+    ],
+    [
+      dash.dependencies.State('selected-listing-cache', 'children')
+    ]
+)
 
-def update_scatter(sample_index, names, marker_symbols, x_axis, y_axis, month_slider, outcome_checklist, x_axis_scale, y_axis_scale):
-    filtered_df = filter_dataframe(graph, sample_index, names, month_slider, outcome_checklist)
+def update_scatter(sample_index, names, marker_symbols, x_axis, y_axis, month_slider, outcome_checklist, x_axis_scale, y_axis_scale,
+                   auction_detail_freeze, index_id):
+    to_address = None
+    token_item_id = None
+    if 'token_item_id' in auction_detail_freeze:
+      token_item_id = graph.loc[index_id, ['token_item_id']].values[0]
+
+    if 'to_address' in auction_detail_freeze:
+      to_address = graph.loc[index_id, ['to_address']].values[0]
+
+    filtered_df = filter_dataframe(df=graph, sample_index=sample_index, dapp_names=names, month_slider=month_slider, outcome_checklist=outcome_checklist,
+                                   token_item_id=token_item_id, to_address=to_address)
     traces = []
 
     for i, name in enumerate(names):
@@ -790,12 +828,17 @@ def generate_external_link(index_id):
 
 @app.callback(
   dash.dependencies.Output('outcome-checklist', 'options'),
-  [dash.dependencies.Input('marker-symbol-picker', 'value')])
-def set_checkbox_options(marker_symbols):
+  [dash.dependencies.Input('marker-symbol-picker', 'value'),
+   dash.dependencies.Input('x-axis-picker', 'value'),
+   dash.dependencies.Input('y-axis-picker', 'value')])
+def set_checkbox_options(marker_symbols, x_axis, y_axis):
     result = []
+
     for value in marker_toggles:
       if ((marker_symbols[0]['button_value'] == 'success-fail') & (value['value'] == 'unresolved')):
-           value['disabled'] = True
+        value['disabled'] = True
+      elif value['value'] in dimensions[x_axis].get('ineligible_points',[]) + dimensions[y_axis].get('ineligible_points',[]):
+        value['disabled'] = True
       else:
         value['disabled'] = False
       result.append(value)
@@ -830,6 +873,16 @@ def sample_dataset(sample_size_toggle):
     return json.dumps(sampled_dataframe)
   else:
     return '{}'
+
+@app.callback(
+  dash.dependencies.Output('sample-size-toggle','values'),
+  [dash.dependencies.Input('auction-detail-freeze', 'values')])
+def remove_sample_restriction(auction_detail_freeze):
+  if auction_detail_freeze == []:
+    return [100000]
+  else:
+    return []
+
 
 if __name__ == '__main__':
     app.run_server(debug=True)
