@@ -76,11 +76,13 @@ data_types = {
 #listings = pd.read_csv(path, dtype=data_types)
 
 path = 'https://s3.amazonaws.com/dapp-dash/listings_abridged_sample.json'
+#path = 'listings_abridged_sample.json'
 #path = 'https://s3.amazonaws.com/dapp-dash/listings_abridged.json'
-#reader = pd.read_json(path, chunksize=50000, dtype=data_types, compression='gzip', lines=True)
-#graph = pd.concat([x for x in reader], ignore_index=True)
+reader = pd.read_json(path, chunksize=50000, dtype=data_types, compression='gzip', lines=True)
+graph = pd.concat([x for x in reader], ignore_index=True)
 
-graph = pd.read_json(path, dtype=data_types, compression='gzip')
+#graph = pd.read_json(path, dtype=data_types, compression='gzip')
+print(graph.shape)
 print(graph.dtypes)
 #graph['created_at'] = pd.to_datetime(graph['created_at'])
 #graph['created_at_trunc'] = pd.to_datetime(graph['created_at_trunc'])
