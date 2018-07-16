@@ -49,7 +49,8 @@ data_types = {
 #listings = pd.concat([x for x in reader], ignore_index=True)
 #listings = pd.read_csv(path, dtype=data_types)
 
-path = 'https://s3.amazonaws.com/dapp-dash/listings_abridged.json'
+path = 'https://s3.amazonaws.com/dapp-dash/listings_abridged_sample.json'
+#path = 'https://s3.amazonaws.com/dapp-dash/listings_abridged.json'
 #reader = pd.read_json(path, chunksize=50000, dtype=data_types, compression='gzip', lines=True)
 #graph = pd.concat([x for x in reader], ignore_index=True)
 
