@@ -34,6 +34,32 @@ app.css.append_css({'external_url': 'https://cdn.rawgit.com/plotly/dash-app-styl
 app.css.append_css({"external_url": "https://codepen.io/chriddyp/pen/brPBPO.css"})
 
 data_types = {
+  'listing_start_price_normalized': 'float64',
+  'listing_end_price_normalized': 'float64',
+  'listing_drop_pct': 'float64',
+  'listing_price_delta_normalized': 'float64',
+  'resolution_sale_price_normalized': 'float64',
+  'resolution_price_delta_normalized': 'float64',
+  'resolution_drop_pct': 'float64',
+  'duration_hours': 'float64',
+  'hours_since_last_listing': 'float64',
+  'name': 'category',
+  'resolution_event_type': 'object',
+  'created_at_trunc': 'datetime',
+  'sales_cum': 'float64',
+  'listings_cum': 'float64',
+  'token_item_id': 'int64',
+  'id': 'int64',
+  'token_id': 'object',
+  'auction_success_categorical': 'int64',
+  'created_at': 'datetime64[ns]',
+  'image_url': 'object',
+  'resolution_from_address': np.object_,
+  'resolution_to_address': np.object_,
+  'event_type': 'object'
+}
+'''
+data_types = {
  'resolution_from_address': np.object_,
  'resolution_to_address': np.object_,
  'name': 'category',
@@ -41,7 +67,7 @@ data_types = {
  'created_at': 'datetime',
  'created_at_trunc': 'datetime'
  }
-
+'''
 #path = os.environ.get('DATA_PATH', 'listings_abridged.csv')
 #path = 'https://s3.amazonaws.com/dapp-dash/listings_abridged.csv'
 #path = 'listings_abridged.csv'
