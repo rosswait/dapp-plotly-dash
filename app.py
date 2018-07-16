@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import os
+import sys
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
@@ -9,8 +11,19 @@ import json
 import datetime as dt
 import numpy as np
 from dateutil import relativedelta
-
+from dotenv import load_dotenv
 from dash.dependencies import Input, Output, State
+
+
+try:
+    # the app is on Heroku
+    os.environ['DYNO']
+    debug = False
+except KeyError:
+    debug = True
+    dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+    load_dotenv(dotenv_path)
+
 
 app = dash.Dash()
 server = app.server
@@ -22,23 +35,33 @@ app.css.append_css({"external_url": "https://codepen.io/chriddyp/pen/brPBPO.css"
 
 data_types = {
  'resolution_from_address': np.object_,
- 'resolution_to_address': np.object_
+ 'resolution_to_address': np.object_,
+ 'name': 'category',
+ 'resolution_event_type': 'category',
+ 'created_at': 'datetime',
+ 'created_at_trunc': 'datetime'
  }
 
-
-path = 'https://s3.amazonaws.com/dapp-dash/listings_abridged.csv'
+#path = os.environ.get('DATA_PATH', 'listings_abridged.csv')
+#path = 'https://s3.amazonaws.com/dapp-dash/listings_abridged.csv'
 #path = 'listings_abridged.csv'
-reader = pd.read_csv(path, chunksize=50000, dtype=data_types)
-listings = pd.concat([x for x in reader], ignore_index=True)
+#reader = pd.read_csv(path, chunksize=50000, dtype=data_types)
+#listings = pd.concat([x for x in reader], ignore_index=True)
 #listings = pd.read_csv(path, dtype=data_types)
 
-listings['created_at'] = pd.to_datetime(listings['created_at'])
-listings['created_at_trunc'] = pd.to_datetime(listings['created_at_trunc'])
+path = 'https://s3.amazonaws.com/dapp-dash/listings_abridged.json'
+#reader = pd.read_json(path, chunksize=50000, dtype=data_types, compression='gzip', lines=True)
+#graph = pd.concat([x for x in reader], ignore_index=True)
 
-graph = listings[(listings['duration_hours'] < 10000)
-            & (listings['listing_start_price_normalized'] < 400)
-            & (listings['listing_start_price_normalized'] >= 0)
-            & (listings['listing_start_price_normalized'] > listings['listing_end_price_normalized'])
+graph = pd.read_json(path, dtype=data_types, compression='gzip')
+print(graph.dtypes)
+#graph['created_at'] = pd.to_datetime(graph['created_at'])
+#graph['created_at_trunc'] = pd.to_datetime(graph['created_at_trunc'])
+
+graph = graph[(graph['duration_hours'] < 10000)
+            & (graph['listing_start_price_normalized'] < 400)
+            & (graph['listing_start_price_normalized'] >= 0)
+            & (graph['listing_start_price_normalized'] > graph['listing_end_price_normalized'])
                 ]
 
 names = sorted(list(set(graph['name'])))
