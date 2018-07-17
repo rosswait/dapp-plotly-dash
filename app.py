@@ -10,29 +10,48 @@ import pandas as pd
 import json
 import datetime as dt
 import numpy as np
-from memory_profiler import profile
+import requests
+#from memory_profiler import profile
 from dateutil import relativedelta
 from dotenv import load_dotenv
 from dash.dependencies import Input, Output, State
 
 
-try:
-    # the app is on Heroku
-    os.environ['DYNO']
-    debug = False
-except KeyError:
-    debug = True
-    dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
-    load_dotenv(dotenv_path)
+METADATA_NETWORK_INTERFACE_URL = 'http://metadata.google.internal/computeMetadatnetwork-interfaces/0/ip'
 
+external_js = []
+
+external_css = [
+'https://cdn.rawgit.com/plotly/dash-app-stylesheets/2d266c578d2a6e8850ebce48fdb52759b2aef506/stylesheet-oil-and-gas.css',
+'https://codepen.io/rosswait/pen/NBraqG.css'
+]
+
+try:
+    r = requests.get(
+        METADATA_NETWORK_INTERFACE_URL,
+        headers={'Metadata-Flavor': 'Google'},
+        timeout=2)
+    debug = True
+    external_js.append('https://www.googletagmanager.com/gtag/js?id=UA-122516304-1')
+    external_js.append('https://codepen.io/rosswait/pen/NBraqG.css')
+except requests.RequestException:
+    #logging.info('Metadata server could not be reached, assuming local.')
+    debug = False
 
 app = dash.Dash()
 server = app.server
 
+for css in external_css:
+    app.css.append_css({'external_url': css})
+
+for js in external_js:
+    app.scripts.append_script({'external_url': js})
+
+
 # Boostrap CSS
-app.css.append_css({'external_url': 'https://cdn.rawgit.com/plotly/dash-app-stylesheets/2d266c578d2a6e8850ebce48fdb52759b2aef506/stylesheet-oil-and-gas.css'})  # noqa: E501
+app.css.append_css({'external_url': ''})  # noqa: E501
 # Loading screen CSS
-app.css.append_css({"external_url": "https://codepen.io/chriddyp/pen/brPBPO.css"})
+app.css.append_css({"external_url": ""})
 
 data_types = {
   'listing_start_price_normalized': 'float64',
@@ -59,36 +78,12 @@ data_types = {
   'resolution_to_address': np.object_,
   'event_type': np.object_
 }
-'''
-data_types = {
- 'resolution_from_address': np.object_,
- 'resolution_to_address': np.object_,
- 'name': 'category',
- 'resolution_event_type': 'category',
- 'created_at': 'datetime',
- 'created_at_trunc': 'datetime'
- }
-'''
-#path = os.environ.get('DATA_PATH', 'listings_abridged.csv')
-#path = 'https://s3.amazonaws.com/dapp-dash/listings_abridged.csv'
-#path = 'listings_abridged.csv'
-#reader = pd.read_csv(path, chunksize=50000, dtype=data_types)
-#listings = pd.concat([x for x in reader], ignore_index=True)
-#listings = pd.read_csv(path, dtype=data_types)
 
-#path = 'listings_abridged_sample.json'
-#path = 'https://s3.amazonaws.com/dapp-dash/listings_abridged.json'
-
-path = 'https://s3.amazonaws.com/dapp-dash/listings_abridged_sample.json'
+path = 'listings_abridged_sample.json'
+#path = 'https://s3.amazonaws.com/dapp-dash/listings_abridged_sample.json'
 chunksize=25000
-#reader = pd.read_json(path, chunksize=25000, dtype=data_types, compression='gzip', lines=True)
-#graph = pd.concat([x for x in reader], ignore_index=True)
 
-#graph = pd.read_json(path, dtype=data_types, compression='gzip')
-#graph['created_at'] = pd.to_datetime(graph['created_at'])
-#graph['created_at_trunc'] = pd.to_datetime(graph['created_at_trunc'])
-
-@profile
+#@profile
 def json_chunk_data(path, chunksize, data_types):
   reader = pd.read_json(path, chunksize=chunksize, dtype=data_types, compression='gzip', lines=True)
   graph = pd.concat([x for x in reader], ignore_index=True)
@@ -292,14 +287,14 @@ def generate_url(dapp_name, token_id):
   token_id = str(int(token_id))
   return base_url+'/'+dapp_name+'/'+token_id
 
-@profile
-def filter_dataframe(df, sample_index, dapp_names, month_slider, outcome_checklist, token_item_id=None, to_address=None):
-  print(type(token_item_id))
-  print(token_item_id)
+#@profile
+def filter_dataframe(df, sample_index, dapp_names, month_slider, outcome_checklist, token_item_id=None, to_address=None, from_address=None):
   if token_item_id is not None:
     df = df.loc[df['token_item_id'] == token_item_id,:]
   if to_address is not None:
     df = df.loc[df['to_address'] == to_address,:]
+  if from_address is not None:
+    df = df.loc[df['from_address'] == from_address,:]
 
   # If there's a set of index values in the cache, use it to filter the data
   index = json.loads(sample_index)
@@ -637,7 +632,10 @@ app.layout = html.Div(
       [
         dcc.Checklist(
         id='auction-detail-freeze',
-        options=[{'label': 'Token Item', 'value': 'token_item_id'},{'label': 'Seller', 'value': 'to_address'}],
+        options=[{'label': 'Token Item', 'value': 'token_item_id'},
+                 {'label': 'Buyer', 'value': 'to_address'},
+                 {'label': 'Seller', 'value': 'from_address'},
+        ],
         values=[]
         )
       ]
@@ -669,16 +667,21 @@ app.layout = html.Div(
 
 def update_scatter(sample_index, names, marker_symbols, x_axis, y_axis, month_slider, outcome_checklist, x_axis_scale, y_axis_scale,
                    auction_detail_freeze, index_id):
-    to_address = None
     token_item_id = None
+    to_address = None
+    from_address = None
+
     if 'token_item_id' in auction_detail_freeze:
       token_item_id = graph.loc[index_id, ['token_item_id']].values[0]
 
     if 'to_address' in auction_detail_freeze:
       to_address = graph.loc[index_id, ['to_address']].values[0]
 
+    if 'from_address' in auction_detail_freeze:
+      from_address = graph.loc[index_id, ['from_address']].values[0]
+
     filtered_df = filter_dataframe(df=graph, sample_index=sample_index, dapp_names=names, month_slider=month_slider, outcome_checklist=outcome_checklist,
-                                   token_item_id=token_item_id, to_address=to_address)
+                                   token_item_id=token_item_id, to_address=to_address, from_address=from_address)
     traces = []
 
     for i, name in enumerate(names):
@@ -962,4 +965,4 @@ def remove_sample_restriction(auction_detail_freeze):
     return []
 
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    app.run_server(debug=debug)
