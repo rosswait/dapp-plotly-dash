@@ -31,12 +31,14 @@ try:
         METADATA_NETWORK_INTERFACE_URL,
         headers={'Metadata-Flavor': 'Google'},
         timeout=2)
-    debug = True
+    data_path = 'https://s3.amazonaws.com/dapp-dash/listings_abridged_sample.json'
+    debug = False
     external_js.append('https://www.googletagmanager.com/gtag/js?id=UA-122516304-1')
     external_js.append('https://codepen.io/rosswait/pen/NBraqG.css')
+
 except requests.RequestException:
-    #logging.info('Metadata server could not be reached, assuming local.')
-    debug = False
+    data_path = 'listings_abridged_sample.json'
+    debug = True
 
 app = dash.Dash()
 server = app.server
@@ -46,12 +48,6 @@ for css in external_css:
 
 for js in external_js:
     app.scripts.append_script({'external_url': js})
-
-
-# Boostrap CSS
-app.css.append_css({'external_url': ''})  # noqa: E501
-# Loading screen CSS
-app.css.append_css({"external_url": ""})
 
 data_types = {
   'listing_start_price_normalized': 'float64',
@@ -79,8 +75,6 @@ data_types = {
   'event_type': np.object_
 }
 
-path = 'listings_abridged_sample.json'
-#path = 'https://s3.amazonaws.com/dapp-dash/listings_abridged_sample.json'
 chunksize=25000
 
 #@profile
@@ -89,7 +83,7 @@ def json_chunk_data(path, chunksize, data_types):
   graph = pd.concat([x for x in reader], ignore_index=True)
   return graph
 
-graph = json_chunk_data(path,chunksize,data_types)
+graph = json_chunk_data(data_path,chunksize,data_types)
 
 graph = graph[(graph['duration_hours'] < 10000)
             & (graph['listing_start_price_normalized'] < 400)
@@ -623,20 +617,20 @@ app.layout = html.Div(
                 )
               ],
               className='five columns'
-            )
+            ),
+            html.Div(
+              [
+                dcc.Checklist(
+                id='auction-detail-freeze',
+                options=[{'label': 'Token Item', 'value': 'token_item_id'},
+                         {'label': 'Buyer', 'value': 'to_address'},
+                         {'label': 'Seller', 'value': 'from_address'},
+                ],
+                values=[]
+                )
+              ],className='twelve columns'
+            ),
           ]
-        )
-      ]
-    ),
-    html.Div(
-      [
-        dcc.Checklist(
-        id='auction-detail-freeze',
-        options=[{'label': 'Token Item', 'value': 'token_item_id'},
-                 {'label': 'Buyer', 'value': 'to_address'},
-                 {'label': 'Seller', 'value': 'from_address'},
-        ],
-        values=[]
         )
       ]
     ),
