@@ -10,6 +10,7 @@ import pandas as pd
 import json
 import datetime as dt
 import numpy as np
+from memory_profiler import profile
 from dateutil import relativedelta
 from dotenv import load_dotenv
 from dash.dependencies import Input, Output, State
@@ -44,19 +45,19 @@ data_types = {
   'duration_hours': 'float64',
   'hours_since_last_listing': 'float64',
   'name': 'category',
-  'resolution_event_type': 'object',
+  'resolution_event_type': 'category',
   'created_at_trunc': 'datetime',
-  'sales_cum': 'float64',
-  'listings_cum': 'float64',
+  'sales_cum': np.float32,
+  'listings_cum': np.float32,
   'token_item_id': 'int64',
   'id': 'int64',
-  'token_id': 'object',
+  'token_id': np.object_,
   'auction_success_categorical': 'int64',
   'created_at': 'datetime64[ns]',
-  'image_url': 'object',
+  'image_url': np.object_,
   'resolution_from_address': np.object_,
   'resolution_to_address': np.object_,
-  'event_type': 'object'
+  'event_type': np.object_
 }
 '''
 data_types = {
@@ -75,17 +76,25 @@ data_types = {
 #listings = pd.concat([x for x in reader], ignore_index=True)
 #listings = pd.read_csv(path, dtype=data_types)
 
-path = 'https://s3.amazonaws.com/dapp-dash/listings_abridged_sample.json'
 #path = 'listings_abridged_sample.json'
 #path = 'https://s3.amazonaws.com/dapp-dash/listings_abridged.json'
-reader = pd.read_json(path, chunksize=25000, dtype=data_types, compression='gzip', lines=True)
-graph = pd.concat([x for x in reader], ignore_index=True)
+
+path = 'https://s3.amazonaws.com/dapp-dash/listings_abridged_sample.json'
+chunksize=25000
+#reader = pd.read_json(path, chunksize=25000, dtype=data_types, compression='gzip', lines=True)
+#graph = pd.concat([x for x in reader], ignore_index=True)
 
 #graph = pd.read_json(path, dtype=data_types, compression='gzip')
-print(graph.shape)
-print(graph.dtypes)
 #graph['created_at'] = pd.to_datetime(graph['created_at'])
 #graph['created_at_trunc'] = pd.to_datetime(graph['created_at_trunc'])
+
+@profile
+def json_chunk_data(path, chunksize, data_types):
+  reader = pd.read_json(path, chunksize=chunksize, dtype=data_types, compression='gzip', lines=True)
+  graph = pd.concat([x for x in reader], ignore_index=True)
+  return graph
+
+graph = json_chunk_data(path,chunksize,data_types)
 
 graph = graph[(graph['duration_hours'] < 10000)
             & (graph['listing_start_price_normalized'] < 400)
@@ -264,12 +273,15 @@ marker_stylings = {
     ]
 }
 
-marker_toggles = []
-for x in marker_stylings['all-outcomes']:
-    y = dict(label=x['label'])
-    y['value'] = x['filter_value']
-    marker_toggles.append(y)
+def generate_marker_toggles(maker_stylings):
+  marker_toggles = []
+  for x in marker_stylings['all-outcomes']:
+      y = dict(label=x['label'])
+      y['value'] = x['filter_value']
+      marker_toggles.append(y)
+  return marker_toggles
 
+marker_toggles = generate_marker_toggles(marker_stylings)
 
 def add_months(start_time, months):
   return start_time + relativedelta.relativedelta(months=months)
@@ -280,6 +292,7 @@ def generate_url(dapp_name, token_id):
   token_id = str(int(token_id))
   return base_url+'/'+dapp_name+'/'+token_id
 
+@profile
 def filter_dataframe(df, sample_index, dapp_names, month_slider, outcome_checklist, token_item_id=None, to_address=None):
   print(type(token_item_id))
   print(token_item_id)
@@ -634,6 +647,7 @@ app.layout = html.Div(
   ],className='row'
 )
 
+
 @app.callback(
     dash.dependencies.Output('auction-scatter', 'figure'),
     [
@@ -946,7 +960,6 @@ def remove_sample_restriction(auction_detail_freeze):
     return [100000]
   else:
     return []
-
 
 if __name__ == '__main__':
     app.run_server(debug=True)

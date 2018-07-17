@@ -1,5 +1,6 @@
 venv
 *.pyc
+*.dat
 .DS_Store
 .env
 listings.pickle
