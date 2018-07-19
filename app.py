@@ -12,6 +12,7 @@ import datetime as dt
 import numpy as np
 import requests
 #from memory_profiler import profile
+from google.cloud import storage
 from dateutil import relativedelta
 from dotenv import load_dotenv
 from dash.dependencies import Input, Output, State
@@ -23,21 +24,27 @@ external_js = []
 
 external_css = [
 'https://cdn.rawgit.com/plotly/dash-app-stylesheets/2d266c578d2a6e8850ebce48fdb52759b2aef506/stylesheet-oil-and-gas.css',
+# 'https://stackpath.bootstrapcdn.com/bootstrap/4.1.2/css/bootstrap.min.css',
 'https://codepen.io/rosswait/pen/NBraqG.css'
 ]
+
 
 try:
     r = requests.get(
         METADATA_NETWORK_INTERFACE_URL,
         headers={'Metadata-Flavor': 'Google'},
         timeout=2)
-    data_path = 'https://s3.amazonaws.com/dapp-dash/listings_abridged_sample.json'
+    CLOUD_STORAGE_BUCKET = os.environ['CLOUD_STORAGE_BUCKET']
+    gcs = storage.Client()
+    bucket = gcs.get_bucket(CLOUD_STORAGE_BUCKET)
+    blob = bucket.get_blob("listings_sample.json")
+    data = blob.download_as_string(destination_file_name)
     debug = False
     external_js.append('https://www.googletagmanager.com/gtag/js?id=UA-122516304-1')
     external_js.append('https://codepen.io/rosswait/pen/NBraqG.css')
 
 except requests.RequestException:
-    data_path = 'listings_abridged_sample.json'
+    data = 'listings_abridged_sample.json'
     debug = True
 
 app = dash.Dash()
@@ -83,7 +90,7 @@ def json_chunk_data(path, chunksize, data_types):
   graph = pd.concat([x for x in reader], ignore_index=True)
   return graph
 
-graph = json_chunk_data(data_path,chunksize,data_types)
+graph = json_chunk_data(data,chunksize,data_types)
 
 graph = graph[(graph['duration_hours'] < 10000)
             & (graph['listing_start_price_normalized'] < 400)
@@ -327,6 +334,7 @@ sorted_inspector_keys = generate_sorted_keys(dimensions, 'inspector_rank')
 
 app.layout = html.Div(
   [
+    # MAIN HEADING
     html.Div(
       [
           html.H1(
@@ -336,54 +344,71 @@ app.layout = html.Div(
                      "margin-bottom": "0"},
               className='eight columns',
           ),
-          html.Img(
-              src="https://storage.googleapis.com/ck-kitty-image/0x06012c8cf97bead5deae237070f9587f8e7a266d/572066.svg",
-              style={
-                  'height': '9%',
-                  'width': '9%',
-                  'float': 'right',
-                  'position': 'relative',
-                  'padding-top': 10,
-                  'padding-right': 0,
-                  'margin-bottom': 0
-              },
-              className='two columns'
-          ),
           html.P(
               'Interactive analysis of ERC721 auctions',
               style={'font-family': 'Helvetica',
                      "font-size": "120%",
-                     "width": "80%",
-                     'margin-bottom': 0},
+                     'margin-bottom': 0,
+                     'margin-left': 3},
               className='eight columns'
           ),
       ]
       ,className='row'
-      ,style={'margin-bottom': 0}
+      ,style={'margin-bottom': 24}
     ),
+
+    # APP SELECTOR
+    html.Div(
+      [
         html.Div(
           [
-            html.Div(
-              [
-                html.P(
-                  'X-axis series:',
-                  style={'font-family': 'Helvetica',
-                         'font-weight': 'bold',
-                         'margin-bottom': 0}
-                ),
-                dcc.Dropdown(
-                  id='x-axis-picker',
-                  options=axis_labels,
-                  multi=False,
-                  value='listing_start_price_normalized'
-                )
-              ]
-              ,className='four columns'
+            html.P(
+              'Select what apps you want to analyze:',
+                style={'font-family': 'Helvetica',
+                       'font-weight': 'bold',
+                       'margin-top': 10
+
+                       },
+                className='label-heading'
+            ),
+            dcc.Dropdown(
+              id='name-picker',
+              options=name_selection_list,
+              multi=True,
+              value=['CryptoBots', 'Ether Tulips'],
+              placeholder="Please choose a game"
+            )
+          ]
+          ,className='twelve columns'
+        ),
+      ],
+      className='row',
+      style={'margin-bottom': 24, 'max-width': 744}
+    ),
+
+    # X & Y SERIES
+    html.Div(
+      [
+        html.Div(
+          [
+            html.P(
+              'X-axis series',
+              style={'font-family': 'Helvetica',
+                     'font-weight': 'bold',
+                     'margin-bottom': 0},
+              className='label-heading'
+
+            ),
+            dcc.Dropdown(
+              id='x-axis-picker',
+              options=axis_labels,
+              multi=False,
+              value='listing_start_price_normalized'
             ),
             html.Div(
               [
                 html.P(
-                  'X-Axis Scale',
+                  'Scale',
                   style={'font-family': 'Helvetica',
                          'font-weight': 'bold',
                          'margin-bottom': 0}
@@ -397,33 +422,46 @@ app.layout = html.Div(
                     }
                   ],
                 value='linear',
-                labelStyle={'display': 'inline-block'}
+                labelStyle={
+                  'display': 'inline-block',
+                  "margin-left": 12
+                }
                 ),
               ]
-              ,className='two columns'
-              ,style={'padding-left': 10}
+              ,style={
+                "margin-top": 8,
+                'display': 'flex',
+                'flex-direction': 'row'
+              }
+            )
+          ]
+          ,className='six columns',
+          style={'max-width': 360}
+
+        ),
+        html.Div(
+          [],
+          className='two columns'
+        ),
+        html.Div(
+          [
+            html.P(
+              'Y-axis series',
+              style={'font-family': 'Helvetica',
+                     'font-weight': 'bold',
+                     'margin-bottom': 0},
+              className='label-heading'
+            ),
+            dcc.Dropdown(
+              id='y-axis-picker',
+              options=axis_labels,
+              multi=False,
+              value='listing_drop_pct'
             ),
             html.Div(
               [
                 html.P(
-                  'Y-axis series:',
-                  style={'font-family': 'Helvetica',
-                         'font-weight': 'bold',
-                         'margin-bottom': 0}
-                ),
-                dcc.Dropdown(
-                  id='y-axis-picker',
-                  options=axis_labels,
-                  multi=False,
-                  value='listing_drop_pct'
-                )
-              ]
-              ,className='four columns'
-            ),
-            html.Div(
-              [
-                html.P(
-                  'Y-Axis Scale',
+                  'Scale',
                   style={'font-family': 'Helvetica',
                          'font-weight': 'bold',
                          'margin-bottom': 0}
@@ -437,63 +475,47 @@ app.layout = html.Div(
                     }
                   ],
                 value='linear',
-                labelStyle={'display': 'inline-block'}
+                labelStyle={
+                  'display': 'inline-block',
+                  "margin-left": 12
+                }
                 ),
               ]
-              ,className='two columns'
-              ,style={'padding-left': 10}
+              ,style={
+                "margin-top": 8,
+                'display': 'flex',
+                'flex-direction': 'row'
+              }
             ),
           ]
-          ,className='row'
-          ,style={'margin-top': 0}
+          ,className='six columns',
+          style={
+          'max-width': 360,
+          'margin-left': 24
+          }
         ),
-      html.Div(
-        [
-          html.Div(
-            [
-              html.P(
-                'Decentralized Application Selector:',
-                  style={'font-family': 'Helvetica',
-                         'font-weight': 'bold',
-                         'margin-top': 10,
-                         'margin-bottom': 0}
-              ),
-              dcc.Dropdown(
-                id='name-picker',
-                options=name_selection_list,
-                multi=True,
-                value=['CryptoBots', 'Ether Tulips'],
-                placeholder="Please choose a game"
-              ),
-              html.P(
-                'Filter by auction creation date',
-                 style={'font-family': 'Helvetica',
-                     'font-weight': 'bold'}
-              ),
-              html.Div(
-                [
-                  dcc.RangeSlider(
-                    id='month-slider',
-                    min=0,
-                    max=time_slider_interval,
-                    value=[0, time_slider_interval],
-                    marks={x: {'label': add_months(start_time,x).strftime("%Y-%m")} for x in range(0,time_slider_interval + 1)}
-                  )
-                ],
-                style={'margin-bottom': '20',
-                       'margin-top': '0',
-                       'margin-left': '20',
-                       'margin-right': '40'}
-              ),
-            ]
-            , className='six columns'
-          ),
+        html.Div(
+          [],
+          className='two columns'
+        )
+      ]
+      ,className='row'
+      ,style={
+        'margin-top': 0,
+        'margin-bottom': 24
+      }
+    ),
+
+    # ADVANCED FILTERS
+    html.Details(
+      [
+        html.Summary('See advanced filters'),
         html.Div(
           [
             html.Div(
               [
                 html.P(
-                  'Scatterplot Shape Sets:',
+                  'Scatterplot Shape Sets',
                   style={'font-family': 'Helvetica',
                          'font-weight': 'bold'
                          }
@@ -515,7 +537,6 @@ app.layout = html.Div(
                 value=marker_stylings['default']
                 ),
               ]
-              , className='three columns'
               , style={'margin-right': 0,
                        'margin-left': 15}
             ),
@@ -534,11 +555,31 @@ app.layout = html.Div(
                   labelStyle={'display': 'inline-block'}
                 )
               ]
-              ,className='three columns'
               ,style={'margin-left': 20}
             )
           ]
         ),
+        html.P(
+          'Filter by auction creation date',
+           style={'font-family': 'Helvetica',
+               'font-weight': 'bold'}
+        ),
+        html.Div(
+          [
+            dcc.RangeSlider(
+              id='month-slider',
+              min=0,
+              max=time_slider_interval,
+              value=[0, time_slider_interval],
+              marks={x: {'label': add_months(start_time,x).strftime("%Y-%m")} for x in range(0,time_slider_interval + 1)}
+            )
+          ],
+          style={'margin-bottom': '20',
+                 'margin-top': '0',
+                 'margin-left': '20',
+                 'margin-right': '40'}
+        ),
+
         html.Div(
           [
             html.P(
@@ -554,13 +595,14 @@ app.layout = html.Div(
               labelStyle={'display': 'inline-block'}
             )
           ]
-          ,className='five columns'
         )
       ]
       ,className='row'
       ,style={'margin-bottom': '0',
-              'padding-bottom': '0'}
+            'padding-bottom': '0'}
     ),
+
+    # SCATTER PLOT
     html.Div(
       [
         dcc.Graph(
@@ -631,12 +673,14 @@ app.layout = html.Div(
               ],className='twelve columns'
             ),
           ]
-        )
-      ]
+        ),
+      ],
+      style={'margin-left': 12, 'margin-right': 12}
     ),
     html.Div(id='sample-cache', style={'display': 'none'}),
     html.Div(id='selected-listing-cache', style={'display': 'none'})
-  ],className='row'
+  ],
+  className='row'
 )
 
 
