@@ -391,19 +391,25 @@ app.layout = html.Div(
       [
         html.Div(
           [
-            html.P(
-              'X-axis series',
-              style={'font-family': 'Helvetica',
-                     'font-weight': 'bold',
-                     'margin-bottom': 0},
-              className='label-heading'
-
-            ),
-            dcc.Dropdown(
-              id='x-axis-picker',
-              options=axis_labels,
-              multi=False,
-              value='listing_start_price_normalized'
+            html.Div(
+              [
+                html.P(
+                  'X-axis series',
+                  style={'font-family': 'Helvetica',
+                         'font-weight': 'bold',
+                         'margin-bottom': 0},
+                  className='label-heading'
+                ),
+                dcc.Dropdown(
+                  id='x-axis-picker',
+                  options=axis_labels,
+                  multi=False,
+                  value='listing_start_price_normalized',
+                  className='axis-picker'
+                )
+              ],
+              style={'border': 'solid 2px grey',
+              'border-radius': '6px'}
             ),
             html.Div(
               [
@@ -429,14 +435,17 @@ app.layout = html.Div(
                 ),
               ]
               ,style={
-                "margin-top": 8,
+                'margin-top': 2,
+                'padding-left': 8,
                 'display': 'flex',
                 'flex-direction': 'row'
               }
             )
           ]
           ,className='six columns',
-          style={'max-width': 360}
+          style={'max-width': 360,
+                  'display': 'inline-block'
+                }
 
         ),
         html.Div(
@@ -445,18 +454,25 @@ app.layout = html.Div(
         ),
         html.Div(
           [
-            html.P(
-              'Y-axis series',
-              style={'font-family': 'Helvetica',
-                     'font-weight': 'bold',
-                     'margin-bottom': 0},
-              className='label-heading'
-            ),
-            dcc.Dropdown(
-              id='y-axis-picker',
-              options=axis_labels,
-              multi=False,
-              value='listing_drop_pct'
+            html.Div(
+              [
+                html.P(
+                  'Y-axis series',
+                  style={'font-family': 'Helvetica',
+                         'font-weight': 'bold',
+                         'margin-bottom': 0},
+                  className='label-heading'
+                ),
+                dcc.Dropdown(
+                  id='y-axis-picker',
+                  options=axis_labels,
+                  multi=False,
+                  value='listing_drop_pct',
+                  className='axis-picker'
+                )
+              ],
+              style={'border': 'solid 2px grey',
+              'border-radius': '6px'}
             ),
             html.Div(
               [
@@ -477,12 +493,13 @@ app.layout = html.Div(
                 value='linear',
                 labelStyle={
                   'display': 'inline-block',
-                  "margin-left": 12
+                  'padding-left': 24
                 }
                 ),
               ]
               ,style={
-                "margin-top": 8,
+                'margin-top': 2,
+                'padding-left': 8,
                 'display': 'flex',
                 'flex-direction': 'row'
               }
