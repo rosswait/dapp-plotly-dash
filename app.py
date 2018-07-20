@@ -330,6 +330,77 @@ axis_labels = [dict(value=key, label=dimensions[key]['label']) for key in sorted
 
 sorted_inspector_keys = generate_sorted_keys(dimensions, 'inspector_rank')
 
+
+
+boxplot_html = html.Div(
+  [
+    dcc.Graph(
+      id='dapp-boxplot'
+    ),
+    html.Div(
+      [
+        dcc.RadioItems(
+          id='box-axis-selector',
+          options=[
+            {'label': 'X Axis', 'value': 'x_axis'
+            },
+            {'label': 'Y Axis', 'value': 'y_axis'
+            }
+          ],
+        value='x_axis',
+        labelStyle={'display': 'inline-block'},
+        style={'width': '175%',
+               'padding-left': '50'}
+        )
+      ]
+    )
+  ]
+)
+
+auction_details_html = html.Div(
+  [
+    dcc.Graph(
+      id='auction-specifics-display'
+    ),
+    html.Div(
+      [
+        html.Div(
+          [
+            html.Div(
+              [
+                html.P('Only display listings from the selected: '),
+                dcc.Checklist(
+                  id='auction-detail-freeze',
+                  options=[{'label': 'Token Item', 'value': 'token_item_id'},
+                           {'label': 'Buyer', 'value': 'to_address'},
+                           {'label': 'Seller', 'value': 'from_address'},
+                  ],
+                  values=[],
+                  labelStyle={'display': 'inline-block'}
+                )
+              ], className='advanced-filter'
+            )
+          ]
+        ),
+        html.Div(
+          [],
+          id='external-link',
+          style={'width':400, 'height': 150}#,
+          #style={'display': 'inline-block'}
+        )
+      ],
+    ),
+  ],
+  style={'padding-left': '10',
+         'padding-right': '10',
+         'padding-top': '10',
+         'margin-bottom': '20'#,
+         #'background-color': 'rgb(240,234,214)'
+  }
+)
+
+
+
 ## Classnames refer to a 12-unit grid that comes from the imported stylesheet
 
 app.layout = html.Div(
@@ -417,7 +488,8 @@ app.layout = html.Div(
                   'Scale',
                   style={'font-family': 'Helvetica',
                          'font-weight': 'bold',
-                         'margin-bottom': 0}
+                         'margin-bottom': 0,
+                         'color': '#666'}
                 ),
                 dcc.RadioItems(
                   id='x-axis-scale',
@@ -449,10 +521,6 @@ app.layout = html.Div(
 
         ),
         html.Div(
-          [],
-          className='two columns'
-        ),
-        html.Div(
           [
             html.Div(
               [
@@ -480,7 +548,8 @@ app.layout = html.Div(
                   'Scale',
                   style={'font-family': 'Helvetica',
                          'font-weight': 'bold',
-                         'margin-bottom': 0}
+                         'margin-bottom': 0,
+                         'color': '#666'}
                 ),
                 dcc.RadioItems(
                   id='y-axis-scale',
@@ -532,8 +601,48 @@ app.layout = html.Div(
             html.Div(
               [
                 html.P(
-                  'Scatterplot Shape Sets',
-                  style={'font-family': 'Helvetica',
+                  'Listing Months',
+                   style={'font-family': 'Helvetica',
+                          'font-weight': 'bold',
+                          'margin-right': 8,
+                          'width': 160}
+                ),
+                dcc.RangeSlider(
+                  id='month-slider',
+                  min=0,
+                  max=time_slider_interval,
+                  value=[0, time_slider_interval],
+                  marks={x: {'label': add_months(start_time,x).strftime("%Y-%m")} for x in range(0,time_slider_interval + 1)},
+                  className='range-slider'
+                )
+              ],
+              className='advanced-filter',
+              style={'margin-top': 12}
+            ),
+            html.Div(
+              [
+                html.P(
+                  'Auction Outcomes',
+                  style={'margin-right': 8,
+                         'font-family': 'Helvetica',
+                         'font-weight': 'bold'
+                         }
+                ),
+                dcc.Checklist(
+                  id='outcome-checklist',
+                  options = marker_toggles,
+                  values = [x['value'] for x in marker_toggles],
+                  labelStyle={'display': 'inline-block'}
+                )
+              ]
+              ,className='advanced-filter'
+            ),
+            html.Div(
+              [
+                html.P(
+                  'Scatter Shapes',
+                  style={'margin-right': 8,
+                         'font-family': 'Helvetica',
                          'font-weight': 'bold'
                          }
                   ),
@@ -554,150 +663,82 @@ app.layout = html.Div(
                 value=marker_stylings['default']
                 ),
               ]
-              , style={'margin-right': 0,
-                       'margin-left': 15}
+              ,className='advanced-filter'
             ),
             html.Div(
               [
                 html.P(
-                  'Auction Outcome Filters',
-                  style={'font-family': 'Helvetica',
+                  'Sample Limit (per Series):',
+                  style={'margin-right': 8,
+                         'font-family': 'Helvetica',
                          'font-weight': 'bold'
                          }
                 ),
                 dcc.Checklist(
-                  id='outcome-checklist',
-                  options = marker_toggles,
-                  values = [x['value'] for x in marker_toggles],
+                  id='sample-size-toggle',
+                  options=[{'label': '100,000', 'value': 100000}],
+                  values=[100000],
                   labelStyle={'display': 'inline-block'}
                 )
-              ]
-              ,style={'margin-left': 20}
+              ], className='advanced-filter'
             )
-          ]
+          ], style={'padding-left': 12,
+                    'max-width': 740}
         ),
-        html.P(
-          'Filter by auction creation date',
-           style={'font-family': 'Helvetica',
-               'font-weight': 'bold'}
-        ),
-        html.Div(
-          [
-            dcc.RangeSlider(
-              id='month-slider',
-              min=0,
-              max=time_slider_interval,
-              value=[0, time_slider_interval],
-              marks={x: {'label': add_months(start_time,x).strftime("%Y-%m")} for x in range(0,time_slider_interval + 1)}
-            )
-          ],
-          style={'margin-bottom': '20',
-                 'margin-top': '0',
-                 'margin-left': '20',
-                 'margin-right': '40'}
-        ),
-
-        html.Div(
-          [
-            html.P(
-              'Sample Limit (per Series):',
-              style={'font-family': 'Helvetica',
-                     'font-weight': 'bold'
-                     }
-            ),
-            dcc.Checklist(
-              id='sample-size-toggle',
-              options=[{'label': '100,000', 'value': 100000}],
-              values=[100000],
-              labelStyle={'display': 'inline-block'}
-            )
-          ]
-        )
       ]
       ,className='row'
       ,style={'margin-bottom': '0',
             'padding-bottom': '0'}
     ),
 
-    # SCATTER PLOT
     html.Div(
       [
-        dcc.Graph(
-          id='auction-scatter',
-          style={'height': 900},
-          className='seven columns'
-        ),
+      # SCATTER PLOT
         html.Div(
           [
-            html.Div(
-              [
-                dcc.Graph(
-                  id='auction-specifics-display'
+            dcc.Graph(
+              id='auction-scatter',
+              style={'height': 750}
+            )
+          ],
+          className='seven columns',
+          style={'margin-left': 12, 'margin-right': 12}
+        ),
+
+        # Auction Details / Scatter Plot
+        html.Div(
+          [
+            dcc.Tabs(
+              id='tabs',
+              children=[
+                dcc.Tab(
+                  label='Details Pane',
+                  children=[auction_details_html]
                 ),
-                html.Div(
-                  [
-                    html.Div(
-                      [],
-                      id='external-link',
-                      style={'width':400, 'height': 150}#,
-                      #style={'display': 'inline-block'}
-                  )
-                  ],
-                  className='five columns'
-                )
-            ],
-            className='five columns',
-            style={'padding-left': '10',
-                   'padding-right': '10',
-                   'padding-top': '10',
-                   'margin-bottom': '20', 'background-color': 'rgb(240,234,214)'}
-            ),
-            html.Div(
-              [
-                dcc.Graph(
-                  id='dapp-boxplot'
-                ),
-                html.Div(
-                  [
-                    dcc.RadioItems(
-                      id='box-axis-selector',
-                      options=[
-                        {'label': 'X Axis', 'value': 'x_axis'
-                        },
-                        {'label': 'Y Axis', 'value': 'y_axis'
-                        }
-                      ],
-                    value='x_axis',
-                    labelStyle={'display': 'inline-block'},
-                    style={'width': '175%',
-                           'padding-left': '50'}
-                    )
-                  ]
+                dcc.Tab(
+                  label='Box Plot',
+                  children=[boxplot_html]
                 )
               ],
-              className='five columns'
+              style={'font-family': 'Helvetica'
+              },
+              content_style={
+                'borderLeft': '1px solid #d6d6d6',
+                'borderRight': '1px solid #d6d6d6',
+                'borderBottom': '1px solid #d6d6d6',
+                'padding': '12px'
+              }
             ),
-            html.Div(
-              [
-                dcc.Checklist(
-                id='auction-detail-freeze',
-                options=[{'label': 'Token Item', 'value': 'token_item_id'},
-                         {'label': 'Buyer', 'value': 'to_address'},
-                         {'label': 'Seller', 'value': 'from_address'},
-                ],
-                values=[]
-                )
-              ],className='twelve columns'
-            ),
-          ]
-        ),
-      ],
-      style={'margin-left': 12, 'margin-right': 12}
-    ),
-    html.Div(id='sample-cache', style={'display': 'none'}),
-    html.Div(id='selected-listing-cache', style={'display': 'none'})
-  ],
-  className='row'
+          ], className='five columns'
+        )
+    ],
+    style={'margin-top': '24'},
+    className='row'
+  ),
+
+  html.Div(id='sample-cache', style={'display': 'none'}),
+  html.Div(id='selected-listing-cache', style={'display': 'none'})
+],className='row'
 )
 
 
