@@ -30,18 +30,18 @@ external_css = [
 
 
 try:
-    r = requests.get(
-        METADATA_NETWORK_INTERFACE_URL,
-        headers={'Metadata-Flavor': 'Google'},
-        timeout=2)
-    CLOUD_STORAGE_BUCKET = os.environ['CLOUD_STORAGE_BUCKET']
-    gcs = storage.Client()
-    bucket = gcs.get_bucket(CLOUD_STORAGE_BUCKET)
-    blob = bucket.get_blob("listings_sample.json")
-    data = blob.download_as_string(destination_file_name)
-    debug = False
-    external_js.append('https://www.googletagmanager.com/gtag/js?id=UA-122516304-1')
-    external_js.append('https://codepen.io/rosswait/pen/NBraqG.css')
+  r = requests.get(
+      METADATA_NETWORK_INTERFACE_URL,
+      headers={'Metadata-Flavor': 'Google'},
+      timeout=2)
+  CLOUD_STORAGE_BUCKET = os.environ['CLOUD_STORAGE_BUCKET']
+  gcs = storage.Client()
+  bucket = gcs.get_bucket(CLOUD_STORAGE_BUCKET)
+  blob = bucket.get_blob("listings_abridged.json")
+  data = blob.download_as_string().decode('utf8')
+  debug = False
+  external_js.append('https://www.googletagmanager.com/gtag/js?id=UA-122516304-1')
+  external_js.append('https://codepen.io/rosswait/pen/zLBPPg.js')
 
 except requests.RequestException:
     data = 'listings_abridged_sample.json'
@@ -86,7 +86,7 @@ chunksize=25000
 
 #@profile
 def json_chunk_data(path, chunksize, data_types):
-  reader = pd.read_json(path, chunksize=chunksize, dtype=data_types, compression='gzip', lines=True)
+  reader = pd.read_json(path, chunksize=chunksize, dtype=data_types, lines=True)
   graph = pd.concat([x for x in reader], ignore_index=True)
   return graph
 
