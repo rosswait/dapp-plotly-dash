@@ -11,6 +11,7 @@ import json
 import datetime as dt
 import numpy as np
 import requests
+import dask.dataframe as dd
 #from memory_profiler import profile
 from google.cloud import storage
 from dateutil import relativedelta
@@ -19,36 +20,62 @@ from dash.dependencies import Input, Output, State
 
 
 METADATA_NETWORK_INTERFACE_URL = 'http://metadata.google.internal/computeMetadatnetwork-interfaces/0/ip'
+CHUNKSIZE=50000
 
-external_js = []
+data_types = {
+  'listing_start_price_normalized': np.float32,
+  'listing_end_price_normalized': np.float32,
+  'listing_drop_pct': np.float32,
+  'listing_price_delta_normalized': np.float32,
+  'resolution_sale_price_normalized': np.float32,
+  'resolution_price_delta_normalized': np.float32,
+  'resolution_drop_pct': np.float32,
+  'duration_hours': np.float32,
+  'hours_since_last_listing': np.float32,
+  'name': 'category',
+  'resolution_event_type': 'category',
+  #'created_at_trunc': 'datetime64[ns]',
+  'sales_cum': np.float32,
+  'listings_cum': np.float32,
+  'token_item_id': np.float32,#np.uint32,
+  'id': np.float32,#np.uint32,
+  'token_id': np.object_,
+  'auction_success_categorical': np.float32,#np.uint8,
+  #'created_at': 'datetime64[ns]',
+  'image_url': np.object_,
+  'resolution_from_address': np.object_,
+  'resolution_to_address': np.object_,
+  'event_type': np.object_
+}
 
-external_css = [
-'https://cdn.rawgit.com/plotly/dash-app-stylesheets/2d266c578d2a6e8850ebce48fdb52759b2aef506/stylesheet-oil-and-gas.css',
-# 'https://stackpath.bootstrapcdn.com/bootstrap/4.1.2/css/bootstrap.min.css',
-'https://codepen.io/rosswait/pen/NBraqG.css'
-]
-
-
+####PRODUCTION
 try:
   r = requests.get(
       METADATA_NETWORK_INTERFACE_URL,
       headers={'Metadata-Flavor': 'Google'},
       timeout=2)
   CLOUD_STORAGE_BUCKET = os.environ['CLOUD_STORAGE_BUCKET']
-  gcs = storage.Client()
-  bucket = gcs.get_bucket(CLOUD_STORAGE_BUCKET)
-  blob = bucket.get_blob("listings_abridged.json")
-  data = blob.download_as_string().decode('utf8')
+  FILE = 'listings_abridged.csv'
+  HOSTED_PATH = 'gs://' + CLOUD_STORAGE_BUCKET + '/' + FILE
   debug = False
+  runtime_prod = True
   external_js.append('https://www.googletagmanager.com/gtag/js?id=UA-122516304-1')
   external_js.append('https://codepen.io/rosswait/pen/zLBPPg.js')
 
 except requests.RequestException:
-    data = 'listings_abridged_sample.json'
+    LOCAL_PATH = 'listings_abridged_sample.csv'
     debug = True
+    runtime_prod = False
 
 app = dash.Dash()
 server = app.server
+
+
+external_js = []
+external_css = [
+'https://cdn.rawgit.com/plotly/dash-app-stylesheets/2d266c578d2a6e8850ebce48fdb52759b2aef506/stylesheet-oil-and-gas.css',
+'https://codepen.io/rosswait/pen/NBraqG.css'
+]
 
 for css in external_css:
     app.css.append_css({'external_url': css})
@@ -56,47 +83,14 @@ for css in external_css:
 for js in external_js:
     app.scripts.append_script({'external_url': js})
 
-data_types = {
-  'listing_start_price_normalized': 'float64',
-  'listing_end_price_normalized': 'float64',
-  'listing_drop_pct': 'float64',
-  'listing_price_delta_normalized': 'float64',
-  'resolution_sale_price_normalized': 'float64',
-  'resolution_price_delta_normalized': 'float64',
-  'resolution_drop_pct': 'float64',
-  'duration_hours': 'float64',
-  'hours_since_last_listing': 'float64',
-  'name': 'category',
-  'resolution_event_type': 'category',
-  'created_at_trunc': 'datetime',
-  'sales_cum': np.float32,
-  'listings_cum': np.float32,
-  'token_item_id': 'int64',
-  'id': 'int64',
-  'token_id': np.object_,
-  'auction_success_categorical': 'int64',
-  'created_at': 'datetime64[ns]',
-  'image_url': np.object_,
-  'resolution_from_address': np.object_,
-  'resolution_to_address': np.object_,
-  'event_type': np.object_
-}
+# For some reason, getting GZIP in the Google Cloud Metadata results in incomplete loading.  Instead access raw & decompress here!
+if runtime_prod:
+  graph = dd.read_csv(HOSTED_PATH, dtype=data_types, parse_dates=['created_at', 'created_at_trunc'], compression='gzip',blocksize=None).compute()
+else:
+  graph = dd.read_csv(LOCAL_PATH, dtype=data_types, parse_dates=['created_at', 'created_at_trunc'], compression='gzip', blocksize=None).compute()
 
-chunksize=25000
-
-#@profile
-def json_chunk_data(path, chunksize, data_types):
-  reader = pd.read_json(path, chunksize=chunksize, dtype=data_types, lines=True)
-  graph = pd.concat([x for x in reader], ignore_index=True)
-  return graph
-
-graph = json_chunk_data(data,chunksize,data_types)
-
-graph = graph[(graph['duration_hours'] < 10000)
-            & (graph['listing_start_price_normalized'] < 400)
-            & (graph['listing_start_price_normalized'] >= 0)
-            & (graph['listing_start_price_normalized'] > graph['listing_end_price_normalized'])
-                ]
+graph = graph[(graph['listing_start_price_normalized'] >= 0)
+            & (graph['listing_start_price_normalized'] > graph['listing_end_price_normalized'])]
 
 names = sorted(list(set(graph['name'])))
 name_selection_list = [{'label':name, 'value':name} for name in names]
@@ -288,7 +282,6 @@ def generate_url(dapp_name, token_id):
   token_id = str(int(token_id))
   return base_url+'/'+dapp_name+'/'+token_id
 
-#@profile
 def filter_dataframe(df, sample_index, dapp_names, month_slider, outcome_checklist, token_item_id=None, to_address=None, from_address=None):
   if token_item_id is not None:
     df = df.loc[df['token_item_id'] == token_item_id,:]
@@ -359,6 +352,12 @@ boxplot_html = html.Div(
 
 auction_details_html = html.Div(
   [
+    html.Div(
+      [],
+      id='external-link',
+      style={'width':400, 'height': 150}#,
+      #style={'display': 'inline-block'}
+    ),
     dcc.Graph(
       id='auction-specifics-display'
     ),
@@ -381,12 +380,6 @@ auction_details_html = html.Div(
               ], className='advanced-filter'
             )
           ]
-        ),
-        html.Div(
-          [],
-          id='external-link',
-          style={'width':400, 'height': 150}#,
-          #style={'display': 'inline-block'}
         )
       ],
     ),
@@ -408,24 +401,42 @@ app.layout = html.Div(
     # MAIN HEADING
     html.Div(
       [
-          html.H1(
-              'Blockchain Digital Good Auctions',
-              style={'font-family': 'Helvetica',
-                     "margin-top": "10",
-                     "margin-bottom": "0"},
-              className='eight columns',
-          ),
-          html.P(
-              'Interactive analysis of ERC721 auctions',
-              style={'font-family': 'Helvetica',
-                     "font-size": "120%",
-                     'margin-bottom': 0,
-                     'margin-left': 3},
-              className='eight columns'
-          ),
+        html.Img(
+              src='https://www.ethereum.org/images/logos/ETHEREUM-ICON_Black_small.png',
+              style={
+                        'margin-right': -15,
+                        'margin-left': -15,
+                        'margin-top': -5,
+                        'height': 85
+                    }
+
+            ),
+        html.Div(
+          [
+
+            html.H1(
+                'Blockchain Digital Good Auctions',
+                style={'font-family': 'Helvetica', 'margin-bottom': 0}
+            ),
+            html.P(
+                'An interactive analysis of ERC721 auctions',
+                style={'font-family': 'Helvetica',
+                       "font-size": "120%",
+                       'margin-bottom': 0,
+                       'margin-left': 3}
+            )
+          ],
+          style={'flex-direction': 'column'
+                 #,'display': 'inline-flex'
+          }
+        )
       ]
-      ,className='row'
-      ,style={'margin-bottom': 24}
+      ,style={'flex-direction': 'row',
+              'display': 'inline-flex',
+              'margin-bottom': 24,
+              'border-bottom': 'solid 2px #999',
+              'width': 744
+      }
     ),
 
     # APP SELECTOR
@@ -437,8 +448,7 @@ app.layout = html.Div(
               'Select what apps you want to analyze:',
                 style={'font-family': 'Helvetica',
                        'font-weight': 'bold',
-                       'margin-top': 10
-
+                       'margin-bottom': '0px'
                        },
                 className='label-heading'
             ),
@@ -451,6 +461,8 @@ app.layout = html.Div(
             )
           ]
           ,className='twelve columns'
+          ,style={'border': 'solid 2px grey',
+          'border-radius': '6px'}
         ),
       ],
       className='row',
@@ -716,7 +728,7 @@ app.layout = html.Div(
                   children=[auction_details_html]
                 ),
                 dcc.Tab(
-                  label='Box Plot',
+                  label='App Comparison Boxplot',
                   children=[boxplot_html]
                 )
               ],
@@ -815,7 +827,7 @@ def update_scatter(sample_index, names, marker_symbols, x_axis, y_axis, month_sl
           traces.append(trace)
 
     layout = go.Layout(
-            title = 'Plot of Individual Listings',
+            title = 'Scatter Plot of Individual Listings',
             hovermode='closest',
             xaxis=dict(
              type= x_axis_scale,
