@@ -37,16 +37,23 @@ data_types = {
   #'created_at_trunc': 'datetime64[ns]',
   'sales_cum': np.float32,
   'listings_cum': np.float32,
-  'token_item_id': np.float32,#np.uint32,
-  'id': np.float32,#np.uint32,
+  'token_item_id': np.uint32,
+  'id': np.uint32,
   'token_id': np.object_,
-  'auction_success_categorical': np.float32,#np.uint8,
+  'auction_success_categorical': np.uint8,
   #'created_at': 'datetime64[ns]',
   'image_url': np.object_,
   'resolution_from_address': np.object_,
   'resolution_to_address': np.object_,
   'event_type': np.object_
 }
+
+'''
+CLOUD_STORAGE_BUCKET = 'dapp-scatter-dashboard.appspot.com'
+FILE = 'listings_abridged.csv'
+PATH = 'gs://' + CLOUD_STORAGE_BUCKET + '/' + FILE
+debug = True
+'''
 
 ####PRODUCTION
 try:
@@ -56,20 +63,19 @@ try:
       timeout=2)
   CLOUD_STORAGE_BUCKET = os.environ['CLOUD_STORAGE_BUCKET']
   FILE = 'listings_abridged.csv'
-  HOSTED_PATH = 'gs://' + CLOUD_STORAGE_BUCKET + '/' + FILE
+  PATH = 'gs://' + CLOUD_STORAGE_BUCKET + '/' + FILE
   debug = False
   runtime_prod = True
   external_js.append('https://www.googletagmanager.com/gtag/js?id=UA-122516304-1')
   external_js.append('https://codepen.io/rosswait/pen/zLBPPg.js')
 
 except requests.RequestException:
-    LOCAL_PATH = 'listings_abridged_sample.csv'
+    PATH = 'listings_abridged.csv'
     debug = True
     runtime_prod = False
 
 app = dash.Dash()
 server = app.server
-
 
 external_js = []
 external_css = [
@@ -84,15 +90,13 @@ for js in external_js:
     app.scripts.append_script({'external_url': js})
 
 # For some reason, getting GZIP in the Google Cloud Metadata results in incomplete loading.  Instead access raw & decompress here!
-if runtime_prod:
-  graph = dd.read_csv(HOSTED_PATH, dtype=data_types, parse_dates=['created_at', 'created_at_trunc'], compression='gzip',blocksize=None).compute()
-else:
-  graph = dd.read_csv(LOCAL_PATH, dtype=data_types, parse_dates=['created_at', 'created_at_trunc'], compression='gzip', blocksize=None).compute()
+df = dd.read_csv(PATH, dtype=data_types, parse_dates=['created_at', 'created_at_trunc'], compression='gzip',blocksize=None).compute()
+df = df.set_index('id')
 
-graph = graph[(graph['listing_start_price_normalized'] >= 0)
-            & (graph['listing_start_price_normalized'] > graph['listing_end_price_normalized'])]
+df = df[(df['listing_start_price_normalized'] >= 0)
+            & (df['listing_start_price_normalized'] > df['listing_end_price_normalized'])]
 
-names = sorted(list(set(graph['name'])))
+names = sorted(list(set(df['name'])))
 name_selection_list = [{'label':name, 'value':name} for name in names]
 
 dimensions = {
@@ -179,10 +183,11 @@ dimensions = {
   }
 }
 
-palette = ['rgb(0,31,63, 1)',
+palette = [
+'rgb(0,31,63, 1)',
 'rgba(1,255,112, 1)',
 'rgba(46,204,64, 1)',
-'rgba(57,204,204, 1)',
+'rgba(255,102,255, 1)',
 'rgba(61,153,112, 1)',
 'rgba(127,219,255, 1)',
 'rgba(133,20,75, 1)',
@@ -195,9 +200,9 @@ palette = ['rgb(0,31,63, 1)',
 
 palette_name_dict = dict(zip(names, palette))
 
-start_time = dt.datetime(year=2018,month=2, day=1)
+start_time = dt.datetime(year=2017,month=6, day=1)
 end_time = dt.datetime(year=2018,month=6, day=1)
-time_slider_interval = relativedelta.relativedelta(end_time, start_time).months
+time_slider_interval = relativedelta.relativedelta(end_time, start_time).months + (relativedelta.relativedelta(end_time, start_time).years * 12)
 
 marker_stylings = {
   'default':
@@ -354,20 +359,38 @@ auction_details_html = html.Div(
   [
     html.Div(
       [],
-      id='external-link',
-      style={'width':400, 'height': 150}#,
+      id='external-link'
       #style={'display': 'inline-block'}
-    ),
-    dcc.Graph(
-      id='auction-specifics-display'
     ),
     html.Div(
       [
+        dcc.Graph(
+          id='auction-specifics-display'
+        ),
         html.Div(
           [
             html.Div(
               [
-                html.P('Only display listings from the selected: '),
+                html.P('Freeze scatter ('),
+                html.Div(
+                  [
+                    '  ?  ',
+                    html.Span('''These settings will filter the scatterplot to the subset of listings which share the selected characteristic(s)
+                                   with the currently highlighted listing.  Enabling any of these options will disable sampling, but you\'ll
+                                   still need to manually enable any additional apps you\'d like to be included for a given
+                                   owner or seller.'''
+                              , className='tooltiptext', style={'padding':'8'}
+                              )
+                  ],
+                  className='tooltip'
+                  ,style={'color': 'blue'}
+                ),
+                html.P(')')
+              ],
+              style={'color': 'rgb(72, 72, 72)', 'font-weight': 'bold', 'margin-bottom': '2', 'display': 'inline-flex'}
+            ),
+            html.Div(
+              [
                 dcc.Checklist(
                   id='auction-detail-freeze',
                   options=[{'label': 'Token Item', 'value': 'token_item_id'},
@@ -377,18 +400,17 @@ auction_details_html = html.Div(
                   values=[],
                   labelStyle={'display': 'inline-block'}
                 )
-              ], className='advanced-filter'
+              ]
             )
-          ]
+          ], style={'flex-direction': 'column', 'padding-left': '15', 'margin-top': '0'}
         )
-      ],
-    ),
+      ]
+    )
   ],
   style={'padding-left': '10',
          'padding-right': '10',
          'padding-top': '10',
-         'margin-bottom': '20'#,
-         #'background-color': 'rgb(240,234,214)'
+         'margin-bottom': '20'
   }
 )
 
@@ -456,7 +478,7 @@ app.layout = html.Div(
               id='name-picker',
               options=name_selection_list,
               multi=True,
-              value=['CryptoBots', 'Ether Tulips'],
+              value=['CryptoBots', 'CryptoFighters', 'Ether Tulips'],
               placeholder="Please choose a game"
             )
           ]
@@ -629,7 +651,7 @@ app.layout = html.Div(
                 )
               ],
               className='advanced-filter',
-              style={'margin-top': 12}
+              style={'margin-top': 12, 'margin-bottom': 24}
             ),
             html.Div(
               [
@@ -709,27 +731,28 @@ app.layout = html.Div(
         html.Div(
           [
             dcc.Graph(
-              id='auction-scatter',
-              style={'height': 750}
+              id='auction-scatter'
             )
           ],
           className='seven columns',
           style={'margin-left': 12, 'margin-right': 12}
         ),
 
-        # Auction Details / Scatter Plot
+        # Auction Details / Box Plot
         html.Div(
           [
             dcc.Tabs(
               id='tabs',
               children=[
                 dcc.Tab(
-                  label='Details Pane',
-                  children=[auction_details_html]
+                  label='Selected Scatter Point Details',
+                  children=[auction_details_html],
+                  style={'font-weight': 'bold'},
                 ),
                 dcc.Tab(
                   label='App Comparison Boxplot',
-                  children=[boxplot_html]
+                  children=[boxplot_html],
+                  style={'font-weight': 'bold'}
                 )
               ],
               style={'font-family': 'Helvetica'
@@ -738,16 +761,69 @@ app.layout = html.Div(
                 'borderLeft': '1px solid #d6d6d6',
                 'borderRight': '1px solid #d6d6d6',
                 'borderBottom': '1px solid #d6d6d6',
+                'borderTop': '1px solid #d6d6d6',
                 'padding': '12px'
               }
             ),
           ], className='five columns'
         )
     ],
-    style={'margin-top': '24'},
+    style={'margin-top': '24', 'margin-bottom': '24'},
     className='row'
   ),
-
+  # FOOTER
+  html.Div(
+      [
+        html.Div(
+          [
+            html.P(
+              'Data courtesy of:'
+            , style={'font-weight': 'bold', 'color':'rgb(72, 72, 72)'}),
+            html.A(
+                'Rarebits.io',
+                href='https://rarebits.io/'
+            )
+          ]
+        ),
+        html.Div(
+          [
+            html.P(
+              'Code available on:'
+              , style={'font-weight': 'bold', 'color':'rgb(72, 72, 72)'}
+            ),
+            html.A(
+                'Github',
+                href='https://github.com/rosswait/dapp-plotly-dash'
+            )
+          ]
+        ),
+        html.Div(
+          [
+            html.P(
+              'Made with:'
+              , style={'font-weight': 'bold', 'color':'rgb(72, 72, 72)'}
+            ),
+            html.A(
+                'Plot.ly',
+                href='https://plot.ly/dash/'
+            )
+          ]
+        ),
+        html.Div(
+          [
+            html.P(
+              'Created by :'
+              , style={'font-weight': 'bold', 'color':'rgb(72, 72, 72)'}
+            ),
+            html.A(
+                'Ross Wait',
+                href='https://www.linkedin.com/in/rosswait/'
+            )
+          ]
+        )
+      ], style={'display':'flex', 'flex-direction':'row', 'justify-content': 'space-around', 'background-color': '#f9fafd', 'width': '71%'
+                ,'margin': 'auto', 'padding': '8px', 'border-radius': '18px', 'border': 'grey solid'}
+  ),
   html.Div(id='sample-cache', style={'display': 'none'}),
   html.Div(id='selected-listing-cache', style={'display': 'none'})
 ],className='row'
@@ -780,15 +856,15 @@ def update_scatter(sample_index, names, marker_symbols, x_axis, y_axis, month_sl
     from_address = None
 
     if 'token_item_id' in auction_detail_freeze:
-      token_item_id = graph.loc[index_id, ['token_item_id']].values[0]
+      token_item_id = df.loc[index_id, ['token_item_id']].values[0]
 
     if 'to_address' in auction_detail_freeze:
-      to_address = graph.loc[index_id, ['to_address']].values[0]
+      to_address = df.loc[index_id, ['to_address']].values[0]
 
     if 'from_address' in auction_detail_freeze:
-      from_address = graph.loc[index_id, ['from_address']].values[0]
+      from_address = df.loc[index_id, ['from_address']].values[0]
 
-    filtered_df = filter_dataframe(df=graph, sample_index=sample_index, dapp_names=names, month_slider=month_slider, outcome_checklist=outcome_checklist,
+    filtered_df = filter_dataframe(df=df, sample_index=sample_index, dapp_names=names, month_slider=month_slider, outcome_checklist=outcome_checklist,
                                    token_item_id=token_item_id, to_address=to_address, from_address=from_address)
     traces = []
 
@@ -799,6 +875,7 @@ def update_scatter(sample_index, names, marker_symbols, x_axis, y_axis, month_sl
             df_by_shape = df_by_name
           else:
             df_by_shape = df_by_name[df_by_name[entry['filter_key']] == entry['filter_value']]
+          print(name + palette_name_dict[name])
           trace = go.Scattergl(
                   x = df_by_shape[x_axis],
                   y = df_by_shape[y_axis],
@@ -829,6 +906,7 @@ def update_scatter(sample_index, names, marker_symbols, x_axis, y_axis, month_sl
     layout = go.Layout(
             title = 'Scatter Plot of Individual Listings',
             hovermode='closest',
+            height=598.5,
             xaxis=dict(
              type= x_axis_scale,
              title= dimensions[x_axis]['label'],
@@ -878,7 +956,7 @@ def update_scatter(sample_index, names, marker_symbols, x_axis, y_axis, month_sl
     ])
 
 def update_boxplot(sample_index, names, month_slider, outcome_checklist, x_axis, y_axis, box_axis_selector, x_axis_scale, y_axis_scale):
-  filtered_df = filter_dataframe(graph, sample_index, names, month_slider, outcome_checklist)
+  filtered_df = filter_dataframe(df, sample_index, names, month_slider, outcome_checklist)
   traces = []
 
   for name in names:
@@ -936,7 +1014,7 @@ def update_selected_listing_cache(click_data, figure):
 )
 def update_auction_detail_table(index_id):
   # Select id of first datapoint in scatter to initialize as a default on pageload
-  filtered_df = graph.loc[index_id, sorted_inspector_keys]
+  filtered_df = df.loc[index_id, sorted_inspector_keys]
   dapp_color = palette_name_dict[filtered_df['name']]
 
   traces = []
@@ -987,32 +1065,50 @@ def update_auction_detail_table(index_id):
     [dash.dependencies.Input('selected-listing-cache', 'children')]
 )
 def generate_external_link(index_id):
-  name = graph.loc[index_id, ['name']].values[0]
-  token_id = graph.loc[index_id, ['token_id']].values[0]
-  image_url = graph.loc[index_id, ['image_url']].values[0]
-  text = html.Div(
+  name = df.loc[index_id, ['name']].values[0]
+  token_id = df.loc[index_id, ['token_id']].values[0]
+  image_url = df.loc[index_id, ['image_url']].values[0]
+  output = html.A(
     [
-      html.A(
-      children=f'View this {name} item on Rarebits.io',
-      href= generate_url(name,token_id),
-      target= "_blank",
-      style={'margin-left': '10', 'vertical-align': 'top'}
+      html.Div(
+        [
+          html.Div(
+            [
+              html.Span(f'Details for this {name} item',
+                  style={'color': '#484848', 'font-size': '16', 'font-weight': 'bold', 'position': 'relative', 'bottom': '-13'}
+              ),
+              html.Span('(click to view on Rarebits.io)',
+                  style={'color': 'blue', 'font-size': '10', 'display': 'block', 'position': 'relative', 'bottom': '-13'})
+            ], style = {'width': '140', 'margin-top': '4'}
+          ),
+          html.Img(
+            src=image_url,
+            style={
+                'display': 'inline',
+                'height': 'inherit',
+                'max-height': 100,
+                'position': 'relative',
+                'padding-top': 0,
+                'padding-right': 0,
+                'margin-bottom': 0
+            },
+          )
+        ],
+        style={'flex-direction': 'row',
+              'height': 'inherit',
+              'display': 'flex',
+              'justify-content': 'space-around',
+              'border': '2px grey dotted',
+              'background-color': '#e9e9e97a'
+        }
       )
     ],
-    style={'width': '150','margin-right': '0', 'margin-left': '20', 'display': 'inline-block', 'vertical-align': 'top'}
+    href= generate_url(name,token_id),
+    target= "_blank",
+    style={'height': 'inherit',
+           'text-decoration': 'none'}
   )
-  image = html.Img(
-    src=image_url,
-    style={
-        'display': 'inline',
-        'height': 'inherit',
-        'position': 'relative',
-        'padding-top': 0,
-        'padding-right': 0,
-        'margin-bottom': 0
-    },
-  )
-  return [text, image]
+  return output
 
 
 @app.callback(
@@ -1058,7 +1154,7 @@ def set_checkbox_options(y_axis):
   [dash.dependencies.Input('sample-size-toggle', 'values')])
 def sample_dataset(sample_size_toggle):
   if sample_size_toggle != []:
-    sampled_dataframe = sample_dataframe(graph, sample_size_toggle[0])
+    sampled_dataframe = sample_dataframe(df, sample_size_toggle[0])
     return json.dumps(sampled_dataframe)
   else:
     return '{}'
