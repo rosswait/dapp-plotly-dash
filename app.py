@@ -18,9 +18,14 @@ from dateutil import relativedelta
 from dotenv import load_dotenv
 from dash.dependencies import Input, Output, State
 
+#### Load configuration settings
 
 METADATA_NETWORK_INTERFACE_URL = 'http://metadata.google.internal/computeMetadatnetwork-interfaces/0/ip'
 CHUNKSIZE=50000
+CLOUD_STORAGE_BUCKET = os.environ.get('CLOUD_STORAGE_BUCKET', '')
+FILE = 'listings_abridged.csv'
+PATH = 'gs://' + CLOUD_STORAGE_BUCKET + '/' + FILE
+
 
 data_types = {
   'listing_start_price_normalized': np.float32,
@@ -34,6 +39,7 @@ data_types = {
   'hours_since_last_listing': np.float32,
   'name': 'category',
   'resolution_event_type': 'category',
+  ## Parse this date field with dask instead of declaring
   #'created_at_trunc': 'datetime64[ns]',
   'sales_cum': np.float32,
   'listings_cum': np.float32,
@@ -41,6 +47,7 @@ data_types = {
   'id': np.uint32,
   'token_id': np.object_,
   'auction_success_categorical': np.uint8,
+  ## Parse this date field with dask instead of declaring
   #'created_at': 'datetime64[ns]',
   'image_url': np.object_,
   'resolution_from_address': np.object_,
@@ -49,33 +56,39 @@ data_types = {
 }
 
 '''
+# Runtime initialization for testing
 CLOUD_STORAGE_BUCKET = 'dapp-scatter-dashboard.appspot.com'
 FILE = 'listings_abridged.csv'
 PATH = 'gs://' + CLOUD_STORAGE_BUCKET + '/' + FILE
 debug = True
 '''
 
-####PRODUCTION
+#### Initialize Runtime Environment
+
 try:
+  # Attempt to retrieve Google App engine instance metadata
   r = requests.get(
       METADATA_NETWORK_INTERFACE_URL,
       headers={'Metadata-Flavor': 'Google'},
       timeout=2)
-  CLOUD_STORAGE_BUCKET = os.environ['CLOUD_STORAGE_BUCKET']
-  FILE = 'listings_abridged.csv'
-  PATH = 'gs://' + CLOUD_STORAGE_BUCKET + '/' + FILE
   debug = False
   runtime_prod = True
+  # Initialize Google Analytics
   external_js.append('https://www.googletagmanager.com/gtag/js?id=UA-122516304-1')
   external_js.append('https://codepen.io/rosswait/pen/zLBPPg.js')
 
 except requests.RequestException:
+    # Overwrite with local filepath if failure
     PATH = 'listings_abridged.csv'
     debug = True
     runtime_prod = False
 
+#### Initialize App
+
 app = dash.Dash()
 server = app.server
+
+#### Load external CS & JS
 
 external_js = []
 external_css = [
@@ -85,52 +98,69 @@ external_css = [
 
 for css in external_css:
     app.css.append_css({'external_url': css})
-
 for js in external_js:
     app.scripts.append_script({'external_url': js})
+
+#### Load remote data into pandas
 
 # For some reason, getting GZIP in the Google Cloud Metadata results in incomplete loading.  Instead access raw & decompress here!
 df = dd.read_csv(PATH, dtype=data_types, parse_dates=['created_at', 'created_at_trunc'], compression='gzip',blocksize=None).compute()
 df = df.set_index('id')
 
+#### Data cleanup & derivation
+
+# Remove irregular listings
 df = df[(df['listing_start_price_normalized'] >= 0)
             & (df['listing_start_price_normalized'] > df['listing_end_price_normalized'])]
 
+# Get list of names
 names = sorted(list(set(df['name'])))
-name_selection_list = [{'label':name, 'value':name} for name in names]
+
+start_time = dt.datetime(year=2017,month=6, day=1)
+end_time = dt.datetime(year=2018,month=6, day=1)
+time_slider_interval = relativedelta.relativedelta(end_time, start_time).months + (relativedelta.relativedelta(end_time, start_time).years * 12)
+
+#### Declare configuration constants
+
+## Dimension metadata (for chart plotting)
+# label:             Display label in axis selector and chart axis
+# default_axis_type: Default scale in charts
+# format:            String formatting
+# axis_picker_rank:  Ordinal appearance rank in the axis dropdown
+# inspector_rank:    Ordinal appearance rank in the details inspector table
 
 dimensions = {
   'listing_start_price_normalized': {
     'label': 'Listed Start Price',
     'default_axis_type': 'log',
     'format': ".3f",
-    'scatter_rank': 0,
+    'axis_picker_rank': 0,
     'inspector_rank':2
   },
   'listing_end_price_normalized': {
     'label': 'Listed End Price',
     'default_axis_type': 'log',
     'format': ".3f",
-    'scatter_rank': 1,
+    'axis_picker_rank': 1,
     'inspector_rank':3
   },
   'listing_drop_pct': {
     'label': 'Start-End Range (% of Start Price)',
     'format': '%',
-    'scatter_rank': 2
+    'axis_picker_rank': 2
   },
   'listing_price_delta_normalized': {
     'label': 'Start-End Range (Absolute)',
     'default_axis_type': 'log',
     'format': ".3f",
-    'scatter_rank': 3
+    'axis_picker_rank': 3
   },
   'resolution_sale_price_normalized': {
     'label': 'Sold Price',
     'default_axis_type':'log',
     'format': ".3f",
     'ineligible_points': ['listed', 'unresolved', 'delisted'],
-    'scatter_rank': 4,
+    'axis_picker_rank': 4,
     'inspector_rank':4
   },
   'resolution_price_delta_normalized': {
@@ -138,26 +168,26 @@ dimensions = {
     'default_axis_type': 'log',
     'format': ".3f",
     'ineligible_points': ['listed', 'unresolved', 'delisted'],
-    'scatter_rank': 5
+    'axis_picker_rank': 5
   },
   'resolution_drop_pct': {
     'label': 'Start-Sold Range (% of Start Price)',
     'format': '%',
     'ineligible_points': ['listed', 'unresolved', 'delisted'],
-    'scatter_rank': 6
+    'axis_picker_rank': 6
   },
   'duration_hours': {
     'label': 'Scheduled Duration (Hours)',
     'default_axis_type': 'log',
     'format': ".1f",
-    'scatter_rank': 7,
+    'axis_picker_rank': 7,
     'inspector_rank':5
   },
   'hours_since_last_listing': {
     'label': 'Hours Since Last Listing',
     'default_axis_type':'log',
     'format': ".2f",
-    'scatter_rank': 8,
+    'axis_picker_rank': 8,
     'inspector_rank':7
   },
   'name': {
@@ -183,6 +213,7 @@ dimensions = {
   }
 }
 
+# Color palette
 palette = [
 'rgb(0,31,63, 1)',
 'rgba(1,255,112, 1)',
@@ -198,35 +229,37 @@ palette = [
 'rgba(255,133,27, 1)',
 'rgba(255,220,0, 1)']
 
-palette_name_dict = dict(zip(names, palette))
-
-start_time = dt.datetime(year=2017,month=6, day=1)
-end_time = dt.datetime(year=2018,month=6, day=1)
-time_slider_interval = relativedelta.relativedelta(end_time, start_time).months + (relativedelta.relativedelta(end_time, start_time).years * 12)
-
+## Dictionary of metadata for styling scatter-plot marker shapes.
+## Each outer dictionary represents a set of dimensions for representing a series of listings
+## Each inner dictionary represents a categorical value within a set
+# button_value:      Callback value to be passed by this radio button
+# df_filter_key:     On which dataframe column to apply the filter
+# df_filter_value:   What value in the dataframe to filter
+# symbol:            Marker shape in the scatter chart
+# size:              Marker size in the scatter chart
+# label:             Label (for the checkbox widget)
 marker_stylings = {
   'default':
     [
       {
       'button_value': 'default',
-      'filter_key': 'auction_success_categorical',
-      'filter_value': None
+      'df_filter_key': 'auction_success_categorical',
+      'df_filter_value': None
       }
     ],
   'success-fail':
-  # filter categorical should list unresolved as nan?
     [
       {
         'button_value': 'success-fail',
-        'filter_key': 'auction_success_categorical',
-        'filter_value': 0,
+        'df_filter_key': 'auction_success_categorical',
+        'df_filter_value': 0,
         'symbol': 'x',
         'size': 7
       },
       {
         'button_value': 'success-fail',
-        'filter_key': 'auction_success_categorical',
-        'filter_value': 1,
+        'df_filter_key': 'auction_success_categorical',
+        'df_filter_value': 1,
         'symbol': 'circle',
         'size': 6
       }
@@ -235,32 +268,32 @@ marker_stylings = {
     [
       {
         'button_value': 'all-outcomes',
-        'filter_key': 'resolution_event_type',
-        'filter_value': 'sold',
+        'df_filter_key': 'resolution_event_type',
+        'df_filter_value': 'sold',
         'symbol': 'circle',
         'size': 6,
         'label': 'Sold'
       },
       {
         'button_value': 'all-outcomes',
-        'filter_key': 'resolution_event_type',
-        'filter_value': 'delisted',
+        'df_filter_key': 'resolution_event_type',
+        'df_filter_value': 'delisted',
         'symbol': 'x',
         'size': 6,
         'label': 'Delisted'
       },
       {
         'button_value': 'all-outcomes',
-        'filter_key': 'resolution_event_type',
-        'filter_value': 'listed',
+        'df_filter_key': 'resolution_event_type',
+        'df_filter_value': 'listed',
         'symbol': 'triangle-up-open',
         'size': 6,
         'label': 'Re-Listed'
       },
       {
         'button_value': 'all-outcomes',
-        'filter_key': 'resolution_event_type',
-        'filter_value': 'unresolved',
+        'df_filter_key': 'resolution_event_type',
+        'df_filter_value': 'unresolved',
         'symbol': 'diamond',
         'size': 6,
         'label': 'Active (Unresolved)'
@@ -268,19 +301,21 @@ marker_stylings = {
     ]
 }
 
+#### Declare shared functions
+
+# Uses the "All Outcomes" series in the marker stylings dictionary to generate an array of label/value pairs for the checkbox config.
 def generate_marker_toggles(maker_stylings):
   marker_toggles = []
   for x in marker_stylings['all-outcomes']:
       y = dict(label=x['label'])
-      y['value'] = x['filter_value']
+      y['value'] = x['df_filter_value']
       marker_toggles.append(y)
   return marker_toggles
-
-marker_toggles = generate_marker_toggles(marker_stylings)
 
 def add_months(start_time, months):
   return start_time + relativedelta.relativedelta(months=months)
 
+# Generates a link to Rarebits.io from a given token_id & dapp name
 def generate_url(dapp_name, token_id):
   base_url = 'https://rarebits.io/item'
   dapp_name = dapp_name.replace(' ', '%20')
@@ -288,6 +323,7 @@ def generate_url(dapp_name, token_id):
   return base_url+'/'+dapp_name+'/'+token_id
 
 def filter_dataframe(df, sample_index, dapp_names, month_slider, outcome_checklist, token_item_id=None, to_address=None, from_address=None):
+  # Only filter for the values if explicitly passed
   if token_item_id is not None:
     df = df.loc[df['token_item_id'] == token_item_id,:]
   if to_address is not None:
@@ -295,7 +331,7 @@ def filter_dataframe(df, sample_index, dapp_names, month_slider, outcome_checkli
   if from_address is not None:
     df = df.loc[df['from_address'] == from_address,:]
 
-  # If there's a set of index values in the cache, use it to filter the data
+  # If there's a set of index values in the browser cache, use it to filter the data.  Used for sampling.
   index = json.loads(sample_index)
   if index != {}:
     df = df.loc[index]
@@ -308,6 +344,7 @@ def filter_dataframe(df, sample_index, dapp_names, month_slider, outcome_checkli
   ]
   return filtered_df
 
+# Return an array of index values representing no more than a fixed number of records per dapp ('name')
 def sample_dataframe(df, points_per_series):
   index = []
   for name in names:
@@ -318,49 +355,31 @@ def sample_dataframe(df, points_per_series):
           index.extend(filtered_df.index)
   return sorted(index)
 
+# Takes in the 'dimensions' dictionary & the name of a desired sort index (either 'axis_picker_rank' or 'inspector_rank')
+# And returns a sorted array of key names (dataframe dimensions)
 def generate_sorted_keys(elements, sort_index):
     keys = [key for key,value in elements.items() if value.get(sort_index, None) is not None]
     ranks = [value[sort_index] for key,value in elements.items() if value.get(sort_index, None) is not None]
     return  [key for (rank,key) in sorted(zip(ranks, keys))]
 
-sorted_axis_keys = generate_sorted_keys(dimensions, 'scatter_rank')
-axis_labels = [dict(value=key, label=dimensions[key]['label']) for key in sorted_axis_keys]
+#### Generate Config-Data Mappings
 
 sorted_inspector_keys = generate_sorted_keys(dimensions, 'inspector_rank')
+sorted_axis_keys = generate_sorted_keys(dimensions, 'axis_picker_rank')
+marker_toggles = generate_marker_toggles(marker_stylings)
+palette_name_dict = dict(zip(names, palette))
+name_selection_list = [{'label':name, 'value':name} for name in names]
+axis_labels = [dict(value=key, label=dimensions[key]['label']) for key in sorted_axis_keys]
 
 
-
-boxplot_html = html.Div(
-  [
-    dcc.Graph(
-      id='dapp-boxplot'
-    ),
-    html.Div(
-      [
-        dcc.RadioItems(
-          id='box-axis-selector',
-          options=[
-            {'label': 'X Axis', 'value': 'x_axis'
-            },
-            {'label': 'Y Axis', 'value': 'y_axis'
-            }
-          ],
-        value='x_axis',
-        labelStyle={'display': 'inline-block'},
-        style={'width': '175%',
-               'padding-left': '50'}
-        )
-      ]
-    )
-  ]
-)
-
+#### Initialize HTML for each Tab pane
+# Auction details tab
 auction_details_html = html.Div(
   [
+    # Children to be populated by decorated function
     html.Div(
       [],
       id='external-link'
-      #style={'display': 'inline-block'}
     ),
     html.Div(
       [
@@ -414,9 +433,34 @@ auction_details_html = html.Div(
   }
 )
 
+#Boxplot tab
+boxplot_html = html.Div(
+  [
+    dcc.Graph(
+      id='dapp-boxplot'
+    ),
+    html.Div(
+      [
+        dcc.RadioItems(
+          id='box-axis-selector',
+          options=[
+            {'label': 'X Axis', 'value': 'x_axis'
+            },
+            {'label': 'Y Axis', 'value': 'y_axis'
+            }
+          ],
+        value='x_axis',
+        labelStyle={'display': 'inline-block'},
+        style={'width': '175%',
+               'padding-left': '50'}
+        )
+      ]
+    )
+  ]
+)
 
 
-## Classnames refer to a 12-unit grid that comes from the imported stylesheet
+#### Primary HTML body
 
 app.layout = html.Div(
   [
@@ -424,7 +468,7 @@ app.layout = html.Div(
     html.Div(
       [
         html.Img(
-              src='https://www.ethereum.org/images/logos/ETHEREUM-ICON_Black_small.png',
+              src='https://storage.googleapis.com/dapp-scatter-dashboard.appspot.com/ETHEREUM-ICON_Black_small.png',
               style={
                         'margin-right': -15,
                         'margin-left': -15,
@@ -449,7 +493,6 @@ app.layout = html.Div(
             )
           ],
           style={'flex-direction': 'column'
-                 #,'display': 'inline-flex'
           }
         )
       ]
@@ -829,6 +872,7 @@ app.layout = html.Div(
 ],className='row'
 )
 
+## Scatterplot
 
 @app.callback(
     dash.dependencies.Output('auction-scatter', 'figure'),
@@ -851,31 +895,35 @@ app.layout = html.Div(
 
 def update_scatter(sample_index, names, marker_symbols, x_axis, y_axis, month_slider, outcome_checklist, x_axis_scale, y_axis_scale,
                    auction_detail_freeze, index_id):
-    token_item_id = None
-    to_address = None
-    from_address = None
-
+    # Filter scatterplot to frozen attributes, if selected
     if 'token_item_id' in auction_detail_freeze:
       token_item_id = df.loc[index_id, ['token_item_id']].values[0]
+    else:
+       token_item_id = None
 
     if 'to_address' in auction_detail_freeze:
       to_address = df.loc[index_id, ['to_address']].values[0]
+    else:
+       to_address = None
 
     if 'from_address' in auction_detail_freeze:
       from_address = df.loc[index_id, ['from_address']].values[0]
+    else:
+      from_address = None
 
+    # Primary DF filter
     filtered_df = filter_dataframe(df=df, sample_index=sample_index, dapp_names=names, month_slider=month_slider, outcome_checklist=outcome_checklist,
                                    token_item_id=token_item_id, to_address=to_address, from_address=from_address)
     traces = []
 
+    # Plot individual traces for each dapp name and auction outcome dimension (if applicable)
     for i, name in enumerate(names):
         df_by_name = filtered_df[filtered_df['name'] == name]
         for j, entry in enumerate(marker_symbols):
-          if entry['filter_value'] is None:
+          if entry['df_filter_value'] is None:
             df_by_shape = df_by_name
           else:
-            df_by_shape = df_by_name[df_by_name[entry['filter_key']] == entry['filter_value']]
-          print(name + palette_name_dict[name])
+            df_by_shape = df_by_name[df_by_name[entry['df_filter_key']] == entry['df_filter_value']]
           trace = go.Scattergl(
                   x = df_by_shape[x_axis],
                   y = df_by_shape[y_axis],
@@ -941,6 +989,8 @@ def update_scatter(sample_index, names, marker_symbols, x_axis, y_axis, month_sl
         'layout': layout
       }
 
+## Boxplot
+
 @app.callback(
     dash.dependencies.Output('dapp-boxplot', 'figure'),
     [
@@ -995,6 +1045,8 @@ def update_boxplot(sample_index, names, month_slider, outcome_checklist, x_axis,
           'layout':layout
   }
 
+## This function updates a hidden Div to contain the index ID of the most-recently-clicked marker in the scatterplot
+
 @app.callback(
     dash.dependencies.Output('selected-listing-cache', 'children'),
     [dash.dependencies.Input('auction-scatter', 'clickData'),
@@ -1007,6 +1059,8 @@ def update_selected_listing_cache(click_data, figure):
   else:
     index_id = click_data['points'][0]['customdata']
   return index_id
+
+# This function draws the auction details table, which contains information about the most recently clicked scatter marker
 
 @app.callback(
     dash.dependencies.Output('auction-specifics-display', 'figure'),
@@ -1059,6 +1113,8 @@ def update_auction_detail_table(index_id):
 
   return {'data': traces, 'layout': layout}
 
+# This function generates the 'external listing pane' from the current listing selection cache.
+# It renders a link to Rarebits.IO, as well as an externally hosted image URL, within an HTML Div.
 
 @app.callback(
     dash.dependencies.Output('external-link', 'children'),
@@ -1110,6 +1166,8 @@ def generate_external_link(index_id):
   )
   return output
 
+# This function deactivates some irrelevant auction outcomes from the selection element.
+# For example, selecting "Sold Price" as an axis will remove unsold listings from the dataset and selector
 
 @app.callback(
   dash.dependencies.Output('outcome-checklist', 'options'),
@@ -1129,6 +1187,7 @@ def set_checkbox_options(marker_symbols, x_axis, y_axis):
       result.append(value)
     return result
 
+# Any options disabled from the selection checklist also have their values removed
 
 @app.callback(
     dash.dependencies.Output('outcome-checklist', 'values'),
@@ -1136,6 +1195,8 @@ def set_checkbox_options(marker_symbols, x_axis, y_axis):
 def set_checkbox_available(available_options):
     foo = [x['value'] for x in available_options if x['disabled'] == False]
     return foo
+
+# Log/linear scale toggle inherits default value upon dimension selection
 
 @app.callback(
   dash.dependencies.Output('x-axis-scale', 'value'),
@@ -1149,6 +1210,9 @@ def set_checkbox_options(x_axis):
 def set_checkbox_options(y_axis):
     return dimensions[y_axis].get('default_axis_type', 'linear')
 
+# If the "Sample Series" setting is selected, send a JSON list of sampled index values to a hidden Div in the browser
+# If unselected, send an empty JSON list
+
 @app.callback(
   dash.dependencies.Output('sample-cache', 'children'),
   [dash.dependencies.Input('sample-size-toggle', 'values')])
@@ -1158,6 +1222,9 @@ def sample_dataset(sample_size_toggle):
     return json.dumps(sampled_dataframe)
   else:
     return '{}'
+
+# If any of the "freeze" options are selected from the auction details pane, automatically disable series sampling
+# If those options are disabled, re-enable sampling
 
 @app.callback(
   dash.dependencies.Output('sample-size-toggle','values'),
