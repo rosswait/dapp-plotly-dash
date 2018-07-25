@@ -55,6 +55,21 @@ data_types = {
   'event_type': np.object_
 }
 
+#### Initialize App
+
+app = dash.Dash()
+server = app.server
+
+#### Load external CSS
+
+external_css = [
+'https://cdn.rawgit.com/plotly/dash-app-stylesheets/2d266c578d2a6e8850ebce48fdb52759b2aef506/stylesheet-oil-and-gas.css',
+'https://codepen.io/rosswait/pen/NBraqG.css'
+]
+for css in external_css:
+    app.css.append_css({'external_url': css})
+
+
 '''
 # Runtime initialization for testing
 CLOUD_STORAGE_BUCKET = 'dapp-scatter-dashboard.appspot.com'
@@ -74,32 +89,14 @@ try:
   debug = False
   runtime_prod = True
   # Initialize Google Analytics
-  external_js.append('https://www.googletagmanager.com/gtag/js?id=UA-122516304-1')
-  external_js.append('https://codepen.io/rosswait/pen/zLBPPg.js')
+  app.scripts.append_script({'external_url': 'https://www.googletagmanager.com/gtag/js?id=UA-122516304-1'})
+  app.scripts.append_script({'external_url': 'https://codepen.io/rosswait/pen/zLBPPg.js'})
 
 except requests.RequestException:
     # Overwrite with local filepath if failure
     PATH = 'listings_abridged.csv'
     debug = True
     runtime_prod = False
-
-#### Initialize App
-
-app = dash.Dash()
-server = app.server
-
-#### Load external CS & JS
-
-external_js = []
-external_css = [
-'https://cdn.rawgit.com/plotly/dash-app-stylesheets/2d266c578d2a6e8850ebce48fdb52759b2aef506/stylesheet-oil-and-gas.css',
-'https://codepen.io/rosswait/pen/NBraqG.css'
-]
-
-for css in external_css:
-    app.css.append_css({'external_url': css})
-for js in external_js:
-    app.scripts.append_script({'external_url': js})
 
 #### Load remote data into pandas
 
