@@ -2,7 +2,7 @@
 
 An interactive analysis of auction listings for digital collectibles on the Etherium platform.  Built on [Plotly's Dash framework](https://dash.plot.ly/) and hosted on Google's App Engine. Dataset is static & managed in-memory via pandas.
 
-Currently deployed on Google App Engine: [take a look](https://dapp-scatter-dashboard.appspot.com/)
+Currently deployed on Google App Engine: https://dapp-scatter-dashboard.appspot.com/
 
 ![Animated example of scatterplot selection](https://storage.googleapis.com/dapp-scatter-dashboard.appspot.com/J5iTHL9gHn.gif "Individual listings can be investigated on the scatterplot")
 
