@@ -15,7 +15,7 @@ dash-html-components==0.11.0
 dash-renderer==0.13.0
 dask==0.18.1
 decorator==4.3.0
-distributed==1.22.0
+distributed==2021.10.0
 Flask==1.0.2
 Flask-Compress==1.4.0
 gcsfs==0.1.1
